@@ -22,7 +22,7 @@ export const LogPanel = memo(({ state, onClearLogs }: LogPanelProps) => {
   };
 
   return (
-    <div className="flex flex-col h-full bg-arb-bg2">
+    <div className="flex flex-col h-full lg:h-full min-h-[280px] max-h-[400px] lg:max-h-none bg-arb-bg2">
       {/* Head */}
       <div className="px-3.5 py-2.5 border-b border-arb-border flex items-center justify-between flex-shrink-0">
         <div className="font-sans text-xs font-bold text-arb-head flex items-center gap-2">
