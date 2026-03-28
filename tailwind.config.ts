@@ -8,11 +8,13 @@ export default {
     container: {
       center: true,
       padding: "2rem",
-      screens: {
-        "2xl": "1400px",
-      },
+      screens: { "2xl": "1400px" },
     },
     extend: {
+      fontFamily: {
+        mono: ['JetBrains Mono', 'monospace'],
+        sans: ['Space Grotesk', 'sans-serif'],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -47,6 +49,24 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        arb: {
+          bg: "hsl(var(--arb-bg))",
+          bg2: "hsl(var(--arb-bg2))",
+          bg3: "hsl(var(--arb-bg3))",
+          bg4: "hsl(var(--arb-bg4))",
+          green: "hsl(var(--arb-green))",
+          red: "hsl(var(--arb-red))",
+          amber: "hsl(var(--arb-amber))",
+          blue: "hsl(var(--arb-blue))",
+          purple: "hsl(var(--arb-purple))",
+          cyan: "hsl(var(--arb-cyan))",
+          border: "hsl(var(--arb-border))",
+          border2: "hsl(var(--arb-border2))",
+          border3: "hsl(var(--arb-border3))",
+          head: "hsl(var(--arb-head))",
+          text: "hsl(var(--arb-text))",
+          muted: "hsl(var(--arb-muted))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
@@ -65,20 +85,12 @@ export default {
       },
       keyframes: {
         "accordion-down": {
-          from: {
-            height: "0",
-          },
-          to: {
-            height: "var(--radix-accordion-content-height)",
-          },
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
         },
         "accordion-up": {
-          from: {
-            height: "var(--radix-accordion-content-height)",
-          },
-          to: {
-            height: "0",
-          },
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
         },
       },
       animation: {
