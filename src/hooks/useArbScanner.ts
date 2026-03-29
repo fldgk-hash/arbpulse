@@ -33,7 +33,44 @@ const KRAKEN_MAP: Record<string,string> = {'XBT/USD':'BTC','ETH/USD':'ETH','SOL/
 const OKX_SYMS = ['BTC-USDT','ETH-USDT','SOL-USDT','BNB-USDT','XRP-USDT','DOGE-USDT','TON-USDT','TRX-USDT','PEPE-USDT','WIF-USDT','SUI-USDT','INJ-USDT','ARB-USDT','OP-USDT','APT-USDT','AVAX-USDT','LINK-USDT','ADA-USDT','DOT-USDT','UNI-USDT','ATOM-USDT','LTC-USDT','NEAR-USDT','AAVE-USDT'];
 const BYBIT_SYMS = ['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','DOGEUSDT','TONUSDT','TRXUSDT','PEPEUSDT','WIFUSDT','SUIUSDT','INJUSDT','ARBUSDT','OPUSDT','APTUSDT','AVAXUSDT','LINKUSDT','ADAUSDT','DOTUSDT','UNIUSDT','ATOMUSDT','LTCUSDT','NEARUSDT','AAVEUSDT'];
 
-const DEX_FEES: Record<string,number> = {raydium:0.0025,'pump-fun':0.01,meteora:0.003,orca:0.003,jupiter:0.002,lifinity:0.002,openbook:0.004,'raydium-clmm':0.002,'raydium-cp':0.003,whirlpool:0.003,cropper:0.003,aldrin:0.003,saber:0.001,mercurial:0.001,crema:0.003,dooar:0.003};
+// ═══ SOLANA DEX FEES ═══
+const DEX_FEES: Record<string,number> = {
+  raydium:0.0025,'pump-fun':0.01,meteora:0.003,orca:0.003,jupiter:0.002,
+  lifinity:0.002,openbook:0.004,'raydium-clmm':0.002,'raydium-cp':0.003,
+  whirlpool:0.003,cropper:0.003,aldrin:0.003,saber:0.001,mercurial:0.001,crema:0.003,dooar:0.003
+};
+
+// ═══ BSC DEX FEES (CoinGecko top BSC DEXs by volume) ═══
+export const BSC_DEX_FEES: Record<string,number> = {
+  'pancakeswap-v3':0.0005,'pancakeswap-v2':0.0025,'pancakeswap-infinity-clmm':0.0005,
+  'uniswap-v3-bsc':0.0005,'uniswap-v4-bsc':0.0005,
+  'thena-v3':0.0001,'thena-fusion':0.0002,'thena':0.0002,
+  biswap:0.001,'biswap-v3':0.0005,
+  apeswap:0.002,babyswap:0.003,sushiswap:0.003,'sushiswap-v3':0.0005,
+  'dodo-bsc':0.001,bakeryswap:0.003,'ellipsis-finance':0.0004,
+  nomiswap:0.002,mdex:0.003,curve:0.0004,openocean:0.001,
+};
+
+// ═══ BSC KNOWN MULTI-DEX TOKENS ═══
+export const BSC_KNOWN_MULTI_DEX = [
+  '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', // WBNB
+  '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82', // CAKE
+  '0x2170Ed0880ac9A755fd29B2688956BD959F933F8', // ETH (BSC)
+  '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c', // BTCB
+  '0x55d398326f99059fF775485246999027B3197955', // USDT (BSC)
+  '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', // BUSD
+  '0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE', // XRP (BSC)
+  '0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47', // ADA (BSC)
+  '0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD', // LINK (BSC)
+  '0xbA2aE424d960c26247Dd6c32edC70B295c744C43', // DOGE (BSC)
+  '0x8fF795a6F4D97E7887C79beA79aba5cc76444aDf', // BCH (BSC)
+  '0x4338665CBB7B2485A8855A139b75D5e34AB0DB94', // LTC (BSC)
+  '0xcF6BB5389c92Bdda8a3747Ddb454cB7a64626C63', // XVS
+  '0x0D8Ce2A99Bb6e3B7Db580eD848240e4a0F9aE153', // FIL (BSC)
+  '0xBf5140A22578168FD562DCcF235E5D43A02ce9B1', // UNI (BSC)
+  '0xCC42724C6683B7E57334c4E856f4c9965ED682bD', // MATIC (BSC)
+];
+
 const SLIP = 0.005;
 
 const TRIPS = [
@@ -68,6 +105,7 @@ export interface PriceData { price?: number; bid?: number; ask?: number; chg24?:
 
 export interface DexOpp {
   id: string;
+  chain: 'solana' | 'bsc';
   symbol: string; name: string; mint: string;
   buyDex: string; sellDex: string;
   buyPrice: number; sellPrice: number;
@@ -110,6 +148,7 @@ export interface ScannerFilters {
   alertThreshold: number; showTri: boolean; showCross: boolean; autoRefresh: boolean;
   dexMinLiq: number; dexMinVol: number; dexMinSpread: number;
   dexSafeOnly: boolean; dexNewOnly: boolean; dexSort: string;
+  dexChain: 'solana' | 'bsc';
   cexInterval: number; dexInterval: number;
 }
 
@@ -118,11 +157,13 @@ export interface ScannerState {
   bestProfit: number; hrProfit: number; sessionOpps: number;
   prices: Record<string, PriceData>;
   cexOpps: CexOpp[]; dexOpps: DexOpp[]; filteredDexOpps: DexOpp[];
+  bscOpps: DexOpp[]; filteredBscOpps: DexOpp[];
   logs: LogEntry[]; history: HistoryEntry[];
   exchangeStatuses: Record<string, ExchangeStatus>;
   soundOn: boolean; countdownPct: number; countdownSec: number; scanProgress: number;
   sessionPnl: number; wins: number; newPairCount: number;
   dexScanning: boolean; dexStatus: string;
+  bscScanning: boolean; bscStatus: string;
   activeView: string;
 }
 
@@ -174,11 +215,13 @@ export function useArbScanner() {
     running: true, scanCount: 0, totalScanned: 0,
     bestProfit: 0, hrProfit: 0, sessionOpps: 0,
     prices: {}, cexOpps: [], dexOpps: [], filteredDexOpps: [],
+    bscOpps: [], filteredBscOpps: [],
     logs: [], history: [],
     exchangeStatuses: Object.fromEntries(EXCHANGES.map(e => [e.id, { id: e.id, ok: false, msg: 'Init' }])),
     soundOn: false, countdownPct: 0, countdownSec: 0, scanProgress: 0,
     sessionPnl: 0, wins: 0, newPairCount: 0,
     dexScanning: false, dexStatus: 'ready',
+    bscScanning: false, bscStatus: 'ready',
     activeView: 'dex',
   });
 
@@ -187,6 +230,7 @@ export function useArbScanner() {
     alertThreshold: 0.5, showTri: true, showCross: true, autoRefresh: true,
     dexMinLiq: 1000, dexMinVol: 200, dexMinSpread: 0.1,
     dexSafeOnly: true, dexNewOnly: false, dexSort: 'spread',
+    dexChain: 'solana',
     cexInterval: 25, dexInterval: 20,
   });
 
@@ -210,6 +254,8 @@ export function useArbScanner() {
   const safeCache = useRef<Record<string, SafetyResult | null>>({});
   const knownPairs = useRef<Set<string>>(new Set());
   const dexOppsRef = useRef<DexOpp[]>([]);
+  const bscOppsRef = useRef<DexOpp[]>([]);
+  const bscTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { filtersRef.current = filters; }, [filters]);
   useEffect(() => { runningRef.current = state.running; soundOnRef.current = state.soundOn; }, [state.running, state.soundOn]);
@@ -428,7 +474,7 @@ export function useArbScanner() {
     return all.slice(0, 45);
   }, [fetchDSEndpoint, addLog]);
 
-  const fetchPairs = useCallback(async (addresses: string[]): Promise<DexOpp[]> => {
+  const fetchPairs = useCallback(async (addresses: string[], chain: 'solana' | 'bsc' = 'solana'): Promise<DexOpp[]> => {
     if (!addresses.length) return [];
     const f = filtersRef.current;
     const allPairs: any[] = [];
@@ -444,7 +490,7 @@ export function useArbScanner() {
       } catch (e: any) { addLog('DS batch failed: ' + e.message, 'warn'); }
     }));
 
-    addLog(`DS: ${allPairs.length} total Solana pairs received`, 'info');
+    addLog(`DS: ${allPairs.length} total ${chain.toUpperCase()} pairs received`, 'info');
 
     // New pair detection
     let newFound = 0;
@@ -462,7 +508,7 @@ export function useArbScanner() {
     // Group by token
     const byToken: Record<string, { symbol: string; name: string; mint: string; pairs: any[] }> = {};
     allPairs.forEach(pair => {
-      if (pair.chainId !== 'solana') return;
+      if (pair.chainId !== chain) return;
       const price = parseFloat(pair.priceUsd || 0);
       if (!price || price <= 0) return;
       const liq = pair.liquidity?.usd || 0;
@@ -477,8 +523,8 @@ export function useArbScanner() {
         byToken[addr].pairs.push({
           dex, price, liq, vol,
           tvl: liq,
-          bid: price * (1 - (DEX_FEES[dex] || 0.003)),
-          ask: price * (1 + (DEX_FEES[dex] || 0.003)),
+          bid: price * (1 - (chain === 'bsc' ? (BSC_DEX_FEES[dex] || 0.0025) : (DEX_FEES[dex] || 0.003))),
+          ask: price * (1 + (chain === 'bsc' ? (BSC_DEX_FEES[dex] || 0.0025) : (DEX_FEES[dex] || 0.003))),
           pairAddr: pair.pairAddress || '',
           createdAt: pair.pairCreatedAt || null,
         });
@@ -494,7 +540,8 @@ export function useArbScanner() {
           const buy = token.pairs[i], sell = token.pairs[j];
           if (sell.price <= buy.price) continue;
           const rawSpread = ((sell.price - buy.price) / buy.price) * 100;
-          const bF = DEX_FEES[buy.dex] || 0.003, sF = DEX_FEES[sell.dex] || 0.003;
+          const feeMap = chain === 'bsc' ? BSC_DEX_FEES : DEX_FEES;
+          const bF = feeMap[buy.dex] || (chain === 'bsc' ? 0.0025 : 0.003), sF = feeMap[sell.dex] || (chain === 'bsc' ? 0.0025 : 0.003);
           const eB = buy.price * (1 + bF + SLIP), eS = sell.price * (1 - sF - SLIP);
           if (eS <= eB) continue;
           const qty = f.tradeSize / eB, net = (eS - eB) * qty, sp = ((eS - eB) / eB) * 100;
@@ -502,7 +549,8 @@ export function useArbScanner() {
           const age = buy.createdAt && sell.createdAt ? Math.min(buy.createdAt, sell.createdAt) : (buy.createdAt || sell.createdAt || null);
           const minLiqVal = Math.min(buy.liq, sell.liq);
           results.push({
-            id: `dex-${token.mint}-${buy.dex}-${sell.dex}`,
+            id: `${chain}-${token.mint}-${buy.dex}-${sell.dex}`,
+            chain,
             symbol: token.symbol, name: token.name, mint: token.mint,
             buyDex: buy.dex, sellDex: sell.dex,
             buyPrice: buy.price, sellPrice: sell.price,
@@ -519,7 +567,7 @@ export function useArbScanner() {
         }
       }
     }
-    addLog(`DEX arb: ${Object.keys(byToken).length} tokens with 2+ DEXes → ${results.length} opps`, 'ok');
+    addLog(`${chain.toUpperCase()} arb: ${Object.keys(byToken).length} tokens with 2+ DEXes → ${results.length} opps`, 'ok');
     return results.sort((a, b) => b.net - a.net);
   }, [addLog]);
 
@@ -568,11 +616,43 @@ export function useArbScanner() {
         if (done === mints.length || done % 4 === 0) {
           dexOppsRef.current = [...raw];
           const f = applyDexFilters(raw);
-          setState(prev => ({ ...prev, dexOpps: raw, filteredDexOpps: f }));
+          setState(prev => ({ ...prev, dexOpps: [...raw], filteredDexOpps: f }));
         }
       });
     });
   }, [getTrending, fetchPairs, applyDexFilters, fetchSafety]);
+
+  // ═══ BSC TRENDING ═══
+  const getBscTrending = useCallback(async (): Promise<string[]> => {
+    const [boosts, profiles, bscSearch] = await Promise.allSettled([
+      fetchDSEndpoint('https://api.dexscreener.com/token-boosts/top/v1', 'bsc-boosts', (t: any) => t.chainId === 'bsc' && t.tokenAddress),
+      fetchDSEndpoint('https://api.dexscreener.com/token-profiles/latest/v1', 'bsc-profiles', (t: any) => t.chainId === 'bsc' && t.tokenAddress),
+      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=bnb', 'bsc-search', (t: any) => t.chainId === 'bsc' && t.baseToken?.address),
+    ]);
+    const seen = new Set<string>();
+    const all: string[] = [];
+    for (const res of [boosts, profiles, bscSearch]) {
+      if (res.status === 'fulfilled') res.value.forEach((a: string) => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
+    }
+    BSC_KNOWN_MULTI_DEX.forEach(a => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
+    addLog(`BSC: ${all.length} unique tokens`, 'info');
+    return all.slice(0, 45);
+  }, [fetchDSEndpoint, addLog]);
+
+  // ═══ SCAN BSC ═══
+  const scanBsc = useCallback(async () => {
+    setState(prev => ({ ...prev, bscScanning: true, bscStatus: 'scanning...' }));
+    const addrs = await getBscTrending();
+    if (!addrs.length) {
+      setState(prev => ({ ...prev, bscScanning: false, bscStatus: 'error' }));
+      return;
+    }
+    const raw = await fetchPairs(addrs, 'bsc');
+    bscOppsRef.current = raw;
+    const filtered = applyDexFilters(raw);
+    setState(prev => ({ ...prev, bscOpps: raw, filteredBscOpps: filtered, bscScanning: false, bscStatus: `${raw.length} opps · ${new Date().toLocaleTimeString()}` }));
+    if (raw.length && soundOnRef.current) beep(920, 0.06);
+  }, [getBscTrending, fetchPairs, applyDexFilters]);
 
   // ═══ CEX CALC ═══
   const calcTri = useCallback((): CexOpp[] => {
@@ -722,7 +802,7 @@ export function useArbScanner() {
       const next = !prev.running;
       if (next) {
         addLog('Resumed', 'ok');
-        setTimeout(() => { runCexScan().then(schedCex); scanDex(); }, 100);
+        setTimeout(() => { runCexScan().then(schedCex); scanDex(); setTimeout(() => scanBsc(), 3000); }, 100);
       } else {
         addLog('Paused', 'warn');
         if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
@@ -745,13 +825,14 @@ export function useArbScanner() {
 
   const refilterDex = useCallback(() => {
     const filtered = applyDexFilters(dexOppsRef.current);
-    setState(prev => ({ ...prev, filteredDexOpps: filtered }));
+    const filteredBsc = applyDexFilters(bscOppsRef.current);
+    setState(prev => ({ ...prev, filteredDexOpps: filtered, filteredBscOpps: filteredBsc }));
   }, [applyDexFilters]);
 
   // ═══ BOOT ═══
   useEffect(() => {
-    addLog('ArbPulse Pro v8.1 — Solana DEX + CEX multi-exchange scanner', 'ok');
-    addLog('DEX: DexScreener 4-endpoint · Safety: RugCheck.xyz · CEX: 4x WS', 'info');
+    addLog('ArbPulse Pro v9.0 — Solana + BSC DEX · CEX multi-exchange scanner', 'ok');
+    addLog('Chains: Solana · BNB Smart Chain · Safety: RugCheck.xyz · CEX: 4x WS', 'info');
 
     // Connect all WS
     Promise.all([connectOKX(), connectBybit(), connectKraken()]).then(() => addLog('All exchange WS connected', 'ok'));
@@ -759,11 +840,18 @@ export function useArbScanner() {
     // Initial scans
     runCexScan().then(schedCex);
     scanDex();
+    // Stagger BSC scan by 3s to avoid API rate limits
+    setTimeout(() => scanBsc(), 3000);
 
-    // DEX auto-scan
+    // Solana DEX auto-scan
     dexTimerRef.current = setInterval(() => {
       if (runningRef.current) scanDex();
     }, 20000);
+
+    // BSC DEX auto-scan (offset by 10s to stagger)
+    bscTimerRef.current = setInterval(() => {
+      if (runningRef.current) scanBsc();
+    }, 30000);
 
     // Request push notification permission
     if ('Notification' in window && Notification.permission === 'default') {
@@ -774,6 +862,7 @@ export function useArbScanner() {
       if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
       if (cdTimerRef.current) clearInterval(cdTimerRef.current);
       if (dexTimerRef.current) clearInterval(dexTimerRef.current);
+      if (bscTimerRef.current) clearInterval(bscTimerRef.current);
       wsRef.current?.close();
       wsOKXRef.current?.close();
       wsBybitRef.current?.close();
@@ -786,7 +875,7 @@ export function useArbScanner() {
     state, filters, setFilters,
     toggleScanner, toggleSound, clearLogs, clearCexResults,
     runCexScan: () => runCexScan().then(schedCex),
-    scanDex, logOpp, clearHistory, exportCSV,
+    scanDex, scanBsc, logOpp, clearHistory, exportCSV,
     setActiveView, refilterDex,
   };
 }

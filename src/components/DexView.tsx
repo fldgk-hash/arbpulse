@@ -3,28 +3,45 @@ import type { DexOpp, ScannerFilters, SafetyResult } from '@/hooks/useArbScanner
 import { fmtPrice, fmtVol, fmtAge, LOW_LIQ_THRESHOLD } from '@/hooks/useArbScanner';
 
 interface DexViewProps {
+  // Solana
   opps: DexOpp[];
-  filters: ScannerFilters;
-  setFilters: React.Dispatch<React.SetStateAction<ScannerFilters>>;
   scanning: boolean;
   status: string;
   onScan: () => void;
+  // BSC
+  bscOpps: DexOpp[];
+  bscScanning: boolean;
+  bscStatus: string;
+  onBscScan: () => void;
+  // shared
+  filters: ScannerFilters;
+  setFilters: React.Dispatch<React.SetStateAction<ScannerFilters>>;
   onRefilter: () => void;
   onLogOpp: (opp: DexOpp) => void;
   onCalc: (opp: DexOpp) => void;
 }
 
-export const DexView = memo(({ opps, filters, setFilters, scanning, status, onScan, onRefilter, onLogOpp, onCalc }: DexViewProps) => {
+export const DexView = memo(({ opps, scanning, status, onScan, bscOpps, bscScanning, bscStatus, onBscScan, filters, setFilters, onRefilter, onLogOpp, onCalc }: DexViewProps) => {
+  const [chain, setChain] = useState<'solana' | 'bsc'>('solana');
+
   const updateFilter = useCallback((key: keyof ScannerFilters, value: any) => {
     setFilters(prev => ({ ...prev, [key]: value }));
     setTimeout(onRefilter, 50);
   }, [setFilters, onRefilter]);
 
+  const activeOpps = chain === 'solana' ? opps : bscOpps;
+  const activeScanning = chain === 'solana' ? scanning : bscScanning;
+  const activeStatus = chain === 'solana' ? status : bscStatus;
+  const activeScan = chain === 'solana' ? onScan : onBscScan;
+
   return (
     <div className="flex flex-col gap-2 p-2.5 overflow-y-auto flex-1 bg-arb-bg">
 
-      {/* DYOR Disclaimer */}
+      {/* DYOR Banner */}
       <DyorBanner />
+
+      {/* Chain Tabs */}
+      <ChainTabs active={chain} onSwitch={setChain} solanaCount={opps.length} bscCount={bscOpps.length} />
 
       {/* Filter Bar */}
       <div className="flex gap-1.5 items-center flex-wrap bg-arb-bg2 border border-arb-border rounded-md p-2 px-2.5 flex-shrink-0">
@@ -65,27 +82,28 @@ export const DexView = memo(({ opps, filters, setFilters, scanning, status, onSc
       {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
         <div className="font-sans font-semibold text-[13px] text-arb-head flex items-center gap-1.5">
-          🚀 Solana DEX Arb <span className="text-[10px] text-arb-muted">{opps.length} opps</span>
-          {opps.filter(o => o.lowLiquidity).length > 0 && (
-            <span className="text-[9px] text-arb-amber ml-1">⚠ {opps.filter(o => o.lowLiquidity).length} low liq</span>
+          {chain === 'solana' ? '🚀' : '🟡'} {chain === 'solana' ? 'Solana' : 'BSC'} DEX Arb
+          <span className="text-[10px] text-arb-muted">{activeOpps.length} opps</span>
+          {activeOpps.filter(o => o.lowLiquidity).length > 0 && (
+            <span className="text-[9px] text-arb-amber ml-1">⚠ {activeOpps.filter(o => o.lowLiquidity).length} low liq</span>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button disabled={scanning} onClick={onScan}
+          <button disabled={activeScanning} onClick={activeScan}
             className="bg-transparent border border-arb-cyan text-arb-cyan px-2.5 py-1 text-[9px] rounded-full cursor-pointer font-mono disabled:opacity-40 disabled:cursor-not-allowed hover:bg-arb-cyan/10 transition-colors">
             ⟳ SCAN
           </button>
-          <span className="text-[9px] text-arb-muted">{status}</span>
+          <span className="text-[9px] text-arb-muted">{activeStatus}</span>
         </div>
       </div>
 
       {/* Cards */}
-      {scanning && !opps.length ? (
+      {activeScanning && !activeOpps.length ? (
         <div className="flex flex-col items-center gap-2.5 py-10 text-arb-muted text-[11px]">
           <div className="w-[18px] h-[18px] border-2 border-arb-border2 border-t-arb-green rounded-full animate-spin-loader" />
-          Fetching live Solana DEX pairs…
+          Fetching live {chain === 'solana' ? 'Solana' : 'BNB Smart Chain'} DEX pairs…
         </div>
-      ) : opps.length === 0 ? (
+      ) : activeOpps.length === 0 ? (
         <div className="text-center py-8 text-arb-muted text-[11px] leading-relaxed">
           🔍 No opportunities above filters.<br /><br />
           <span className="text-arb-amber">Try:</span><br />
@@ -95,7 +113,7 @@ export const DexView = memo(({ opps, filters, setFilters, scanning, status, onSc
         </div>
       ) : (
         <div className="flex flex-col gap-2 flex-1">
-          {opps.slice(0, 50).map((o, i) => (
+          {activeOpps.slice(0, 50).map((o, i) => (
             <DexCard key={o.id} opp={o} index={i} onLog={onLogOpp} onCalc={onCalc} />
           ))}
         </div>
@@ -103,6 +121,59 @@ export const DexView = memo(({ opps, filters, setFilters, scanning, status, onSc
     </div>
   );
 });
+
+/* ─── Chain Tabs ────────────────────────────────────────────────────────────── */
+function ChainTabs({ active, onSwitch, solanaCount, bscCount }: {
+  active: 'solana' | 'bsc';
+  onSwitch: (c: 'solana' | 'bsc') => void;
+  solanaCount: number;
+  bscCount: number;
+}) {
+  return (
+    <div className="flex gap-1.5 flex-shrink-0 bg-arb-bg2 border border-arb-border rounded-md p-1.5">
+      <ChainTab
+        active={active === 'solana'}
+        onClick={() => onSwitch('solana')}
+        icon="◎"
+        label="Solana"
+        count={solanaCount}
+        color="text-arb-green"
+        activeBg="bg-arb-green/10 border-arb-green/30"
+      />
+      <ChainTab
+        active={active === 'bsc'}
+        onClick={() => onSwitch('bsc')}
+        icon="🟡"
+        label="BNB Chain"
+        count={bscCount}
+        color="text-arb-amber"
+        activeBg="bg-arb-amber/10 border-arb-amber/30"
+        badge="$1.08B Vol"
+      />
+    </div>
+  );
+}
+
+function ChainTab({ active, onClick, icon, label, count, color, activeBg, badge }: {
+  active: boolean; onClick: () => void; icon: string; label: string; count: number;
+  color: string; activeBg: string; badge?: string;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded text-[10px] font-semibold border transition-all cursor-pointer ${active ? `${activeBg} ${color}` : 'border-transparent text-arb-muted hover:text-arb-text'}`}
+    >
+      <span>{icon}</span>
+      <span>{label}</span>
+      {count > 0 && (
+        <span className={`text-[8px] px-1 py-0.5 rounded-full font-bold ${active ? 'bg-arb-bg3' : 'bg-arb-bg3'}`}>{count}</span>
+      )}
+      {badge && !active && (
+        <span className="text-[7px] text-arb-amber border border-arb-amber/30 px-1 py-0.5 rounded ml-0.5">{badge}</span>
+      )}
+    </button>
+  );
+}
 
 /* ─── DYOR Banner ───────────────────────────────────────────────────────────── */
 function DyorBanner() {
@@ -128,12 +199,20 @@ function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number;
   const accentClass = o.hot ? 'bg-gradient-to-b from-arb-red to-arb-amber' : o.safety ? (o.safety.score < 300 ? 'bg-arb-green' : o.safety.score < 600 ? 'bg-arb-amber' : 'bg-arb-red') : 'bg-arb-amber';
   const borderClass = o.hot ? 'border-arb-red/30' : o.isNew ? 'border-arb-cyan/30' : o.lowLiquidity ? 'border-arb-amber/40' : 'border-arb-border';
   const minTvl = Math.min(o.buyTvl || o.buyLiq, o.sellTvl || o.sellLiq);
+  const isBsc = o.chain === 'bsc';
+  const explorerBase = isBsc ? 'https://bscscan.com/token/' : 'https://solscan.io/token/';
+  const dsPath = isBsc ? `https://dexscreener.com/bsc/${o.buyPairAddr || o.mint}` : `https://dexscreener.com/solana/${o.buyPairAddr || o.mint}`;
 
   return (
     <div className={`bg-arb-bg2 border rounded-lg p-2.5 px-3 relative overflow-hidden animate-fade-in ${borderClass}`}>
       <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${accentClass}`} />
 
-      {/* Low Liquidity Warning bar */}
+      {/* Chain badge */}
+      <div className={`absolute top-2 right-2 text-[7px] px-1.5 py-0.5 rounded font-bold border ${isBsc ? 'bg-arb-amber/10 border-arb-amber/30 text-arb-amber' : 'bg-arb-green/10 border-arb-green/30 text-arb-green'}`}>
+        {isBsc ? '🟡 BSC' : '◎ SOL'}
+      </div>
+
+      {/* Low Liquidity Warning */}
       {o.lowLiquidity && (
         <div className="flex items-center gap-1.5 bg-arb-amber/[0.08] border border-arb-amber/25 rounded px-2 py-1 mb-2">
           <span className="text-arb-amber text-[12px]">⚠</span>
@@ -143,7 +222,7 @@ function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number;
       )}
 
       {/* Row 1: Token name + badges */}
-      <div className="flex items-start justify-between mb-1.5">
+      <div className="flex items-start justify-between mb-1.5 pr-12">
         <div className="flex-1 min-w-0 mr-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="font-sans font-bold text-[15px] text-arb-head">{o.symbol}</span>
@@ -155,7 +234,7 @@ function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number;
           <div className="text-[9px] text-arb-muted mt-0.5">{o.name}</div>
           <MintAddressChip mint={o.mint} />
         </div>
-        <div className="flex gap-1 flex-wrap justify-end max-w-[55%]">
+        <div className="flex gap-1 flex-wrap justify-end">
           {o.isVNew && <Badge cls="bg-arb-cyan/10 border-arb-cyan/30 text-arb-cyan">🆕 NEW 6H</Badge>}
           {!o.isVNew && o.isNew && <Badge cls="bg-arb-cyan/10 border-arb-cyan/30 text-arb-cyan">NEW 24H</Badge>}
           {o.hot && <Badge cls="bg-gradient-to-br from-[#ff6b35] to-arb-red border-none text-white animate-hot-glow">🔥 HOT</Badge>}
@@ -166,13 +245,13 @@ function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number;
 
       {/* Route */}
       <div className="flex items-center gap-1.5 mb-1.5 overflow-hidden">
-        <DexPill dex={o.buyDex} />
+        <DexPill dex={o.buyDex} chain={o.chain} />
         <span className="text-arb-muted text-[12px]">→</span>
-        <DexPill dex={o.sellDex} />
+        <DexPill dex={o.sellDex} chain={o.chain} />
         <span className="text-[9px] text-arb-muted ml-auto whitespace-nowrap">${fmtPrice(o.buyPrice)} → ${fmtPrice(o.sellPrice)}</span>
       </div>
 
-      {/* Stats grid — 5 cells including TVL */}
+      {/* Stats grid — 5 cells */}
       <div className="grid grid-cols-5 gap-1 mb-1.5">
         <StatBox label="Spread" value={`${o.spreadPct.toFixed(2)}%`} cls={sc} />
         <StatBox label="Net Profit" value={`$${o.net.toFixed(2)}`} cls="text-arb-green" />
@@ -186,13 +265,13 @@ function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number;
         <StatBox label="Age" value={fmtAge(o.createdAt)} cls={o.isNew ? 'text-arb-amber' : 'text-arb-muted'} />
       </div>
 
-      {/* Pair addresses row — verifiable links */}
+      {/* Pair address rows */}
       <div className="flex items-center gap-2 flex-wrap mb-1">
-        <PairAddressRow label="Buy" addr={o.buyPairAddr} dex={o.buyDex} />
+        <PairAddressRow label="Buy" addr={o.buyPairAddr} dex={o.buyDex} chain={o.chain} />
         {o.sellPairAddr && o.sellPairAddr !== o.buyPairAddr && (
           <>
             <span className="text-arb-border2 text-[9px]">|</span>
-            <PairAddressRow label="Sell" addr={o.sellPairAddr} dex={o.sellDex} />
+            <PairAddressRow label="Sell" addr={o.sellPairAddr} dex={o.sellDex} chain={o.chain} />
           </>
         )}
       </div>
@@ -217,19 +296,13 @@ function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number;
         <button onClick={() => onCalc(o)} className="px-2.5 py-1 bg-arb-cyan/[0.07] border border-arb-cyan/20 text-arb-cyan font-mono text-[9px] cursor-pointer rounded transition-all hover:bg-arb-cyan/15">
           🧮 CALC
         </button>
-        <a
-          href={`https://dexscreener.com/solana/${o.buyPairAddr || o.mint}`}
-          target="_blank" rel="noopener noreferrer"
-          className="px-2.5 py-1 bg-arb-purple/[0.07] border border-arb-purple/20 text-arb-purple font-mono text-[9px] rounded transition-all hover:bg-arb-purple/15 no-underline inline-flex items-center"
-        >
+        <a href={dsPath} target="_blank" rel="noopener noreferrer"
+          className="px-2.5 py-1 bg-arb-purple/[0.07] border border-arb-purple/20 text-arb-purple font-mono text-[9px] rounded transition-all hover:bg-arb-purple/15 no-underline inline-flex items-center">
           📊 DS
         </a>
-        <a
-          href={`https://solscan.io/token/${o.mint}`}
-          target="_blank" rel="noopener noreferrer"
-          className="px-2.5 py-1 bg-arb-blue/[0.07] border border-arb-border2 text-arb-muted font-mono text-[9px] rounded transition-all hover:bg-arb-blue/10 no-underline inline-flex items-center"
-        >
-          🔍 Scan
+        <a href={`${explorerBase}${o.mint}`} target="_blank" rel="noopener noreferrer"
+          className="px-2.5 py-1 bg-arb-blue/[0.07] border border-arb-border2 text-arb-muted font-mono text-[9px] rounded transition-all hover:bg-arb-blue/10 no-underline inline-flex items-center">
+          🔍 {isBsc ? 'BSCscan' : 'Solscan'}
         </a>
       </div>
     </div>
@@ -241,11 +314,7 @@ function PairAddressChip({ addr, dex, label }: { addr: string; dex: string; labe
   const [copied, setCopied] = useState(false);
   if (!addr) return null;
   const short = addr.slice(0, 4) + '…' + addr.slice(-4);
-  const copy = () => {
-    navigator.clipboard?.writeText(addr).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+  const copy = () => { navigator.clipboard?.writeText(addr).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1500); };
   return (
     <button onClick={copy} title={`${label}: ${addr}`}
       className="text-[8px] font-mono text-arb-blue border border-arb-border2 bg-arb-bg3 px-1.5 py-0.5 rounded cursor-pointer hover:border-arb-blue/40 hover:text-arb-cyan transition-colors">
@@ -258,11 +327,7 @@ function MintAddressChip({ mint }: { mint: string }) {
   const [copied, setCopied] = useState(false);
   if (!mint) return null;
   const short = 'mint: ' + mint.slice(0, 6) + '…' + mint.slice(-4);
-  const copy = () => {
-    navigator.clipboard?.writeText(mint).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+  const copy = () => { navigator.clipboard?.writeText(mint).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1500); };
   return (
     <button onClick={copy} title={`Token mint: ${mint}`}
       className="text-[8px] font-mono text-arb-muted hover:text-arb-blue transition-colors mt-0.5 text-left">
@@ -271,31 +336,30 @@ function MintAddressChip({ mint }: { mint: string }) {
   );
 }
 
-function PairAddressRow({ label, addr, dex }: { label: string; addr: string; dex: string }) {
+function PairAddressRow({ label, addr, dex, chain }: { label: string; addr: string; dex: string; chain: string }) {
   const [copied, setCopied] = useState(false);
   if (!addr) return <span className="text-[8px] text-arb-muted">{label}: —</span>;
   const short = addr.slice(0, 6) + '…' + addr.slice(-4);
-  const copy = () => {
-    navigator.clipboard?.writeText(addr).catch(() => {});
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
-  };
+  const copy = () => { navigator.clipboard?.writeText(addr).catch(() => {}); setCopied(true); setTimeout(() => setCopied(false), 1500); };
+  const dsUrl = chain === 'bsc' ? `https://dexscreener.com/bsc/${addr}` : `https://dexscreener.com/solana/${addr}`;
   return (
     <div className="flex items-center gap-1">
       <span className="text-[8px] text-arb-muted">{label}:</span>
-      <button onClick={copy} title={`${dex} pair: ${addr}`}
-        className="text-[8px] font-mono text-arb-blue hover:text-arb-cyan transition-colors cursor-pointer">
+      <button onClick={copy} title={`${dex} pair: ${addr}`} className="text-[8px] font-mono text-arb-blue hover:text-arb-cyan transition-colors cursor-pointer">
         {copied ? '✓' : short}
       </button>
-      <a href={`https://dexscreener.com/solana/${addr}`} target="_blank" rel="noopener noreferrer"
-        className="text-[8px] text-arb-muted hover:text-arb-amber transition-colors" title="View on DexScreener">↗</a>
+      <a href={dsUrl} target="_blank" rel="noopener noreferrer" className="text-[8px] text-arb-muted hover:text-arb-amber transition-colors" title="View on DexScreener">↗</a>
     </div>
   );
 }
 
-function DexPill({ dex }: { dex: string }) {
-  const names: Record<string, string> = { raydium: 'Raydium', 'pump-fun': 'Pump.fun', meteora: 'Meteora', orca: 'Orca', jupiter: 'Jupiter', lifinity: 'Lifinity', openbook: 'OpenBook' };
-  const colors: Record<string, string> = { 'pump-fun': 'bg-arb-pink/10 border-arb-pink/30 text-arb-pink', raydium: 'bg-arb-green/[0.08] border-arb-green/25 text-arb-green', meteora: 'bg-arb-purple/10 border-arb-purple/30 text-arb-purple', orca: 'bg-arb-cyan/[0.08] border-arb-cyan/25 text-arb-cyan', jupiter: 'bg-arb-amber/[0.08] border-arb-amber/25 text-arb-amber' };
+function DexPill({ dex, chain }: { dex: string; chain: string }) {
+  const solNames: Record<string, string> = { raydium:'Raydium','pump-fun':'Pump.fun',meteora:'Meteora',orca:'Orca',jupiter:'Jupiter',lifinity:'Lifinity',openbook:'OpenBook' };
+  const bscNames: Record<string, string> = { 'pancakeswap-v3':'PCS V3','pancakeswap-v2':'PCS V2','pancakeswap-infinity-clmm':'PCS∞','uniswap-v3-bsc':'UNI V3','uniswap-v4-bsc':'UNI V4','thena-v3':'THENA V3','thena-fusion':'THENA','biswap':'Biswap','biswap-v3':'Biswap V3',apeswap:'ApeSwap',babyswap:'BabySwap',sushiswap:'Sushi','dodo-bsc':'DODO',bakeryswap:'Bakery',curve:'Curve',openocean:'OpenOcean' };
+  const solColors: Record<string, string> = { 'pump-fun':'bg-arb-pink/10 border-arb-pink/30 text-arb-pink',raydium:'bg-arb-green/[0.08] border-arb-green/25 text-arb-green',meteora:'bg-arb-purple/10 border-arb-purple/30 text-arb-purple',orca:'bg-arb-cyan/[0.08] border-arb-cyan/25 text-arb-cyan',jupiter:'bg-arb-amber/[0.08] border-arb-amber/25 text-arb-amber' };
+  const bscColors: Record<string, string> = { 'pancakeswap-v3':'bg-arb-amber/10 border-arb-amber/30 text-arb-amber','pancakeswap-v2':'bg-arb-amber/[0.08] border-arb-amber/20 text-arb-amber','pancakeswap-infinity-clmm':'bg-arb-amber/10 border-arb-amber/30 text-arb-amber','uniswap-v3-bsc':'bg-arb-pink/10 border-arb-pink/30 text-arb-pink','uniswap-v4-bsc':'bg-arb-pink/10 border-arb-pink/30 text-arb-pink','thena-v3':'bg-arb-cyan/10 border-arb-cyan/30 text-arb-cyan','thena-fusion':'bg-arb-cyan/[0.08] border-arb-cyan/20 text-arb-cyan',biswap:'bg-arb-blue/10 border-arb-blue/30 text-arb-blue',apeswap:'bg-arb-purple/10 border-arb-purple/30 text-arb-purple' };
+  const names = chain === 'bsc' ? bscNames : solNames;
+  const colors = chain === 'bsc' ? bscColors : solColors;
   return <span className={`text-[9px] px-2 py-0.5 rounded-full font-semibold whitespace-nowrap border ${colors[dex] || 'bg-arb-blue/[0.08] border-arb-border2 text-arb-muted'}`}>{names[dex] || dex}</span>;
 }
 
@@ -326,9 +390,7 @@ function FilterChip({ label, children }: { label: string; children: React.ReactN
   return <div className="flex items-center gap-1 text-[9px] text-arb-muted"><span>{label}</span>{children}</div>;
 }
 
-function Sep() {
-  return <div className="w-px h-5 bg-arb-border2 flex-shrink-0" />;
-}
+function Sep() { return <div className="w-px h-5 bg-arb-border2 flex-shrink-0" />; }
 
 function ToggleSmall({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (

@@ -14,7 +14,7 @@ const Index = () => {
   const {
     state, filters, setFilters,
     toggleScanner, toggleSound, clearLogs, clearCexResults,
-    runCexScan, scanDex, logOpp, clearHistory, exportCSV,
+    runCexScan, scanDex, scanBsc, logOpp, clearHistory, exportCSV,
     setActiveView, refilterDex,
   } = useArbScanner();
 
@@ -40,9 +40,10 @@ const Index = () => {
         </aside>
         <main className="overflow-hidden flex flex-col relative">
           {/* DEX view always visible on desktop main */}
-          <DexView opps={state.filteredDexOpps} filters={filters} setFilters={setFilters}
-            scanning={state.dexScanning} status={state.dexStatus}
-            onScan={scanDex} onRefilter={refilterDex}
+          <DexView
+            opps={state.filteredDexOpps} scanning={state.dexScanning} status={state.dexStatus} onScan={scanDex}
+            bscOpps={state.filteredBscOpps} bscScanning={state.bscScanning} bscStatus={state.bscStatus} onBscScan={scanBsc}
+            filters={filters} setFilters={setFilters} onRefilter={refilterDex}
             onLogOpp={o => logOpp(o)} onCalc={o => setCalcOpp(o)} />
         </main>
         <section className="border-l border-arb-border bg-arb-bg2 flex flex-col overflow-hidden">
@@ -53,9 +54,10 @@ const Index = () => {
       {/* Mobile: view switching */}
       <div className="lg:hidden flex-1 overflow-hidden flex flex-col">
         {view === 'dex' && (
-          <DexView opps={state.filteredDexOpps} filters={filters} setFilters={setFilters}
-            scanning={state.dexScanning} status={state.dexStatus}
-            onScan={scanDex} onRefilter={refilterDex}
+          <DexView
+            opps={state.filteredDexOpps} scanning={state.dexScanning} status={state.dexStatus} onScan={scanDex}
+            bscOpps={state.filteredBscOpps} bscScanning={state.bscScanning} bscStatus={state.bscStatus} onBscScan={scanBsc}
+            filters={filters} setFilters={setFilters} onRefilter={refilterDex}
             onLogOpp={o => logOpp(o)} onCalc={o => setCalcOpp(o)} />
         )}
         {view === 'cex' && (
