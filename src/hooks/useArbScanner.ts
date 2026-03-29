@@ -68,13 +68,18 @@ export const BSC_DEX_FEES: Record<string,number> = {
 };
 
 // ═══ BSC KNOWN MULTI-DEX TOKENS ═══
+// These are the tokens MOST LIKELY to have active pairs on 2+ BSC DEXes.
+// Prioritized first in getBscTrending so they are never cut by the slice limit.
 export const BSC_KNOWN_MULTI_DEX = [
+  // Core — verified on PancakeSwap V2, V3, Biswap, Uniswap BSC, THENA
   '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c', // WBNB
   '0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82', // CAKE
   '0x2170Ed0880ac9A755fd29B2688956BD959F933F8', // ETH (BSC)
   '0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c', // BTCB
   '0x55d398326f99059fF775485246999027B3197955', // USDT (BSC)
   '0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56', // BUSD
+  '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d', // USDC (BSC)
+  // Large cap — PancakeSwap + Biswap + Uniswap BSC
   '0x1D2F0da169ceB9fC7B3144628dB156f3F6c60dBE', // XRP (BSC)
   '0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47', // ADA (BSC)
   '0xF8A0BF9cF54Bb92F17374d9e9A321E6a111a51bD', // LINK (BSC)
@@ -85,6 +90,14 @@ export const BSC_KNOWN_MULTI_DEX = [
   '0x0D8Ce2A99Bb6e3B7Db580eD848240e4a0F9aE153', // FIL (BSC)
   '0xBf5140A22578168FD562DCcF235E5D43A02ce9B1', // UNI (BSC)
   '0xCC42724C6683B7E57334c4E856f4c9965ED682bD', // MATIC (BSC)
+  // Additional multi-DEX liquid tokens
+  '0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402', // DOT (BSC)
+  '0x1CE0c2827e2eF14D5C4f29a091d735A204794041', // AVAX (BSC)
+  '0x0Eb3a705fc54725037CC9e008bDede697f62F335', // ATOM (BSC)
+  '0x4FA7163E153419E0E1064e418dd7A99314Ed27b6', // AAVE (BSC)
+  '0x888Aae9D6F86C7F68E17bF0B4cDf0cCcb9cE2A3', // SAND (BSC)
+  '0x52CE071Bd9b1C4B00A0b92D298c512478CaD67e8', // COMP (BSC)
+  '0x101d82428437127bF1608F699CD651e6Abf9766E', // BAT (BSC)
 ];
 
 const SLIP = 0.005;
@@ -142,19 +155,30 @@ export const LOW_LIQ_THRESHOLD = 10000;
 export const BSC_LOW_LIQ_THRESHOLD = 25000;
 
 // Issue #3: Normalize DexScreener DEX IDs to match our fee map keys
-// API may return generic 'thena' when pool is actually 'thena-v3'
+// IMPORTANT: Do NOT merge v2/v3 — they are different DEXes for arbitrage purposes.
+// Only normalize truly generic IDs that have no version info at all.
 function normalizeDexId(dex: string, chain: 'solana' | 'bsc'): string {
   if (chain !== 'bsc') return dex;
   const d = dex.toLowerCase();
-  // Prefer more specific version key if a generic one comes in
-  if (d === 'pancakeswap') {
-    // Can't distinguish v2/v3 without pool data — assume v3 (safer, lower fee)
-    return 'pancakeswap-v3';
-  }
-  if (d === 'uniswap') return 'uniswap-v3-bsc';
-  if (d === 'biswap') return 'biswap'; // already exact
-  // Return as-is (already normalized or unknown)
-  return d;
+  // If the ID already has a version suffix, leave it as-is
+  if (d.includes('-v2') || d.includes('-v3') || d.includes('-v4') ||
+      d.includes('-infinity') || d.includes('-fusion') || d.includes('-clmm')) return d;
+  // Map truly generic IDs to their canonical fee-map key
+  // These are cases where DexScreener returns no version but we know the DEX
+  const GENERIC_MAP: Record<string, string> = {
+    'thena': 'thena-v3',       // Thena defaulted to V3 post-2024
+    'openocean': 'openocean',
+    'curve': 'curve',
+    'nomiswap': 'nomiswap',
+    'mdex': 'mdex',
+    'bakeryswap': 'bakeryswap',
+    'babyswap': 'babyswap',
+    'apeswap': 'apeswap',
+    'sushiswap': 'sushiswap',
+    'biswap': 'biswap',
+    'ellipsis-finance': 'ellipsis-finance',
+  };
+  return GENERIC_MAP[d] ?? d; // return as-is if not in map (preserves pancakeswap-v2 etc.)
 }
 
 export interface CexOpp {
@@ -701,19 +725,69 @@ export function useArbScanner() {
 
   // ═══ BSC TRENDING ═══
   const getBscTrending = useCallback(async (): Promise<string[]> => {
-    const [boosts, profiles, bscSearch] = await Promise.allSettled([
-      fetchDSEndpoint('https://api.dexscreener.com/token-boosts/top/v1', 'bsc-boosts', (t: any) => t.chainId === 'bsc' && t.tokenAddress),
-      fetchDSEndpoint('https://api.dexscreener.com/token-profiles/latest/v1', 'bsc-profiles', (t: any) => t.chainId === 'bsc' && t.tokenAddress),
-      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=bnb', 'bsc-search', (t: any) => t.chainId === 'bsc' && t.baseToken?.address),
-    ]);
+    // Strategy: Arbitrage needs tokens on 2+ DEXes.
+    // token-boosts/profiles = memecoins on 1 DEX → WRONG source.
+    // Correct approach:
+    //   1. KNOWN multi-DEX tokens first (guaranteed 2+ DEX presence)
+    //   2. Fetch top pairs from each major BSC DEX → extract tokens appearing on 2+ DEXes
+    //   3. Search by liquid quote tokens (WBNB, USDT) to find established pairs
+
     const seen = new Set<string>();
     const all: string[] = [];
-    for (const res of [boosts, profiles, bscSearch]) {
-      if (res.status === 'fulfilled') res.value.forEach((a: string) => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
-    }
-    BSC_KNOWN_MULTI_DEX.forEach(a => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
-    addLog(`BSC: ${all.length} unique tokens`, 'info');
-    return all.slice(0, 45);
+    const add = (addr: string) => { if (addr && !seen.has(addr)) { seen.add(addr); all.push(addr); } };
+
+    // 1. KNOWN multi-DEX tokens — always first, never cut by slice
+    BSC_KNOWN_MULTI_DEX.forEach(add);
+
+    // 2. Fetch top pairs per DEX in parallel — find tokens on multiple DEXes
+    const DEX_ENDPOINTS = [
+      'https://api.dexscreener.com/latest/dex/pairs/bsc/pancakeswap-v3',
+      'https://api.dexscreener.com/latest/dex/pairs/bsc/pancakeswap-v2',
+      'https://api.dexscreener.com/latest/dex/pairs/bsc/uniswap-v3-bsc',
+      'https://api.dexscreener.com/latest/dex/pairs/bsc/biswap',
+      'https://api.dexscreener.com/latest/dex/pairs/bsc/thena-v3',
+    ];
+
+    const dexResults = await Promise.allSettled(
+      DEX_ENDPOINTS.map(url =>
+        fetch(url, { signal: AbortSignal.timeout(10000) })
+          .then(r => r.ok ? r.json() : null)
+          .then(d => (d?.pairs || []).map((p: any) => p.baseToken?.address).filter(Boolean) as string[])
+          .catch(() => [] as string[])
+      )
+    );
+
+    // Count how many DEXes each token appears on
+    const dexCount: Record<string, number> = {};
+    dexResults.forEach(res => {
+      if (res.status !== 'fulfilled') return;
+      const uniq = [...new Set(res.value)]; // dedupe within same DEX
+      uniq.forEach(addr => { dexCount[addr] = (dexCount[addr] || 0) + 1; });
+    });
+
+    // Add tokens appearing on 2+ DEXes first (highest priority)
+    Object.entries(dexCount)
+      .filter(([, count]) => count >= 2)
+      .sort(([, a], [, b]) => b - a)
+      .forEach(([addr]) => add(addr));
+
+    // Then add tokens on at least 1 DEX (might have more pairs we don't know yet)
+    Object.entries(dexCount)
+      .filter(([, count]) => count === 1)
+      .forEach(([addr]) => add(addr));
+
+    // 3. Search by liquid quote tokens for further discovery
+    const searches = await Promise.allSettled([
+      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=WBNB', 'bsc-wbnb', (t: any) => t.chainId === 'bsc' && t.baseToken?.address !== '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c' && t.baseToken?.address),
+      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=CAKE', 'bsc-cake', (t: any) => t.chainId === 'bsc' && t.baseToken?.address),
+      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=USDT+bsc', 'bsc-usdt', (t: any) => t.chainId === 'bsc' && t.baseToken?.address),
+    ]);
+    searches.forEach(res => {
+      if (res.status === 'fulfilled') res.value.forEach((a: string) => add(a));
+    });
+
+    addLog(`BSC: ${all.length} unique tokens (${Object.values(dexCount).filter(c => c >= 2).length} confirmed multi-DEX)`, 'info');
+    return all.slice(0, 60); // 2 batches × 30 = 60 max
   }, [fetchDSEndpoint, addLog]);
 
   // ═══ SCAN BSC ═══
