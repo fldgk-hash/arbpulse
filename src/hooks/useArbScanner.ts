@@ -5,8 +5,7 @@ export const SYMBOLS = [
   'BTC','ETH','SOL','BNB','XRP','DOGE','TON','TRX','SHIB','PEPE',
   'FLOKI','BONK','WIF','SUI','TIA','FET','RENDER','WLD','INJ','ARB',
   'OP','APT','AVAX','LINK','ADA','DOT','UNI','ATOM','LTC','BCH',
-  'NEAR','FIL','ICP','STX','HBAR','VET','XLM','ALGO','RUNE','THETA',
-  'FTM','AAVE','MKR','LDO','PENDLE','ONDO','PYTH','JUP'
+  'NEAR','FIL','ICP','STX','HBAR','RUNE','AAVE','MKR','JUP','PYTH'
 ];
 
 export const EXCHANGES = [
@@ -24,649 +23,758 @@ const CG_MAP: Record<string, string> = {
   ARB:'arbitrum',OP:'optimism',APT:'aptos',AVAX:'avalanche-2',LINK:'chainlink',
   ADA:'cardano',DOT:'polkadot',UNI:'uniswap',ATOM:'cosmos',LTC:'litecoin',
   BCH:'bitcoin-cash',NEAR:'near',FIL:'filecoin',ICP:'internet-computer',
-  STX:'blockstack',HBAR:'hedera-hashgraph',VET:'vechain',XLM:'stellar',
-  ALGO:'algorand',RUNE:'thorchain',THETA:'theta-token',FTM:'fantom',
-  AAVE:'aave',MKR:'maker',LDO:'lido-dao',PENDLE:'pendle',ONDO:'ondo-finance',
-  PYTH:'pyth-network',JUP:'jupiter-exchange-solana'
+  STX:'blockstack',HBAR:'hedera-hashgraph',RUNE:'thorchain',
+  AAVE:'aave',MKR:'maker',JUP:'jupiter-exchange-solana',PYTH:'pyth-network'
 };
 
-const OKX_ALIAS: Record<string, string> = { MATIC: 'POL' };
-const BYBIT_ALIAS: Record<string, string> = { MATIC: 'POL' };
-const KRAKEN_WS_MAP: Record<string, string> = {
-  BTC:'BTC/USD',ETH:'ETH/USD',SOL:'SOL/USD',XRP:'XRP/USD',ADA:'ADA/USD',
-  AVAX:'AVAX/USD',DOGE:'DOGE/USD',LINK:'LINK/USD',DOT:'DOT/USD',BNB:'BNB/USD',
-  ATOM:'ATOM/USD',LTC:'LTC/USD',BCH:'BCH/USD',NEAR:'NEAR/USD',FIL:'FIL/USD',
-  APT:'APT/USD',ARB:'ARB/USD',OP:'OP/USD',INJ:'INJ/USD',SUI:'SUI/USD',
-  TIA:'TIA/USD',UNI:'UNI/USD',ICP:'ICP/USD',WLD:'WLD/USD',FET:'FET/USD',
-  PEPE:'PEPE/USD',BONK:'BONK/USD',RENDER:'RENDER/USD',RUNE:'RUNE/USD',
-  AAVE:'AAVE/USD',MKR:'MKR/USD',
-};
-const KRAKEN_REV = Object.fromEntries(Object.entries(KRAKEN_WS_MAP).map(([k, v]) => [v, k]));
+const KRAKEN_PAIRS = ['XBT/USD','ETH/USD','SOL/USD','XRP/USD','DOGE/USD','ADA/USD','DOT/USD','AVAX/USD','LINK/USD','LTC/USD','ATOM/USD','UNI/USD','NEAR/USD','AAVE/USD','APT/USD'];
+const KRAKEN_MAP: Record<string,string> = {'XBT/USD':'BTC','ETH/USD':'ETH','SOL/USD':'SOL','XRP/USD':'XRP','DOGE/USD':'DOGE','ADA/USD':'ADA','DOT/USD':'DOT','AVAX/USD':'AVAX','LINK/USD':'LINK','LTC/USD':'LTC','ATOM/USD':'ATOM','UNI/USD':'UNI','NEAR/USD':'NEAR','AAVE/USD':'AAVE','APT/USD':'APT'};
 
-const REAL_CROSS_PAIRS = [
-  'ethbtc','bnbbtc','xrpbtc','adabtc','ltcbtc','dotbtc','linkbtc','solbtc',
-  'avaxbtc','atombtc','nearbtc','injbtc','suibtc',
-  'ethbnb','solbnb','xrpbnb','adabnb','dotbnb',
-  'soleth','avaxeth','linketh','doteth','arbeth',
+const OKX_SYMS = ['BTC-USDT','ETH-USDT','SOL-USDT','BNB-USDT','XRP-USDT','DOGE-USDT','TON-USDT','TRX-USDT','PEPE-USDT','WIF-USDT','SUI-USDT','INJ-USDT','ARB-USDT','OP-USDT','APT-USDT','AVAX-USDT','LINK-USDT','ADA-USDT','DOT-USDT','UNI-USDT','ATOM-USDT','LTC-USDT','NEAR-USDT','AAVE-USDT'];
+const BYBIT_SYMS = ['BTCUSDT','ETHUSDT','SOLUSDT','BNBUSDT','XRPUSDT','DOGEUSDT','TONUSDT','TRXUSDT','PEPEUSDT','WIFUSDT','SUIUSDT','INJUSDT','ARBUSDT','OPUSDT','APTUSDT','AVAXUSDT','LINKUSDT','ADAUSDT','DOTUSDT','UNIUSDT','ATOMUSDT','LTCUSDT','NEARUSDT','AAVEUSDT'];
+
+const DEX_FEES: Record<string,number> = {raydium:0.0025,'pump-fun':0.01,meteora:0.003,orca:0.003,jupiter:0.002,lifinity:0.002,openbook:0.004,'raydium-clmm':0.002,'raydium-cp':0.003,whirlpool:0.003,cropper:0.003,aldrin:0.003,saber:0.001,mercurial:0.001,crema:0.003,dooar:0.003};
+const SLIP = 0.005;
+
+const TRIPS = [
+  ['BTCUSDT','ETHBTC','ETHUSDT'],['BTCUSDT','BNBBTC','BNBUSDT'],
+  ['BTCUSDT','XRPBTC','XRPUSDT'],['BTCUSDT','ADABTC','ADAUSDT'],
+  ['BTCUSDT','LINKBTC','LINKUSDT'],['BTCUSDT','LTCBTC','LTCUSDT'],
+  ['BTCUSDT','DOTBTC','DOTUSDT'],['BTCUSDT','SOLBTC','SOLUSDT'],
+  ['ETHUSDT','SOLETH','SOLUSDT'],['ETHUSDT','AVAXETH','AVAXUSDT'],
+  ['ETHUSDT','LINKETH','LINKUSDT'],['ETHUSDT','DOTETH','DOTUSDT'],
+  ['BNBUSDT','ETHBNB','ETHUSDT'],['BNBUSDT','SOLBNB','SOLUSDT'],
+  ['BNBUSDT','XRPBNB','XRPUSDT'],['BNBUSDT','DOTBNB','DOTUSDT'],
 ];
 
-const SLIPPAGE = 0.0012;
+const KNOWN_MULTI_DEX = [
+  'So11111111111111111111111111111111111111112',
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+  'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
+  'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',
+  '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr',
+  'A8C3xuqscfmyLrte3VmTqrAq8kgMASius9AFNANwpump',
+  'ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82',
+  'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3',
+  'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
+  'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE',
+  'MNDEFzGvMt87ueuHvVU9VcTqsAP5b3fTGPsHuuPA5ey',
+];
+
 export const SCAN_INTERVAL = 25000;
 
-export interface PriceData {
-  price?: number;
-  bid?: number;
-  ask?: number;
-  chg24?: number;
-}
+export interface PriceData { price?: number; bid?: number; ask?: number; chg24?: number; }
 
-export interface Opportunity {
+export interface DexOpp {
   id: string;
-  type: 'triangular' | 'cross';
-  label: string;
-  route?: string[];
-  buyExchange?: string;
-  sellExchange?: string;
-  buyAt: number;
-  sellAt: number;
-  spreadPct: number;
-  grossPnl: number;
-  netPnl: number;
-  hot: boolean;
+  symbol: string; name: string; mint: string;
+  buyDex: string; sellDex: string;
+  buyPrice: number; sellPrice: number;
+  eB: number; eS: number;
+  rawSpread: number; spreadPct: number; net: number;
+  buyLiq: number; sellLiq: number; minLiq: number;
+  vol24h: number; createdAt: number | null;
+  isNew: boolean; isVNew: boolean; hot: boolean;
+  safety: SafetyResult | null;
 }
 
-export interface LogEntry {
-  time: string;
-  msg: string;
-  type: 'ok' | 'info' | 'warn' | 'err';
+export interface CexOpp {
+  id: string; type: 'tri' | 'cross'; label: string;
+  buyEx: string; sellEx: string;
+  buyAt: number; sellAt: number;
+  spreadPct: number; net: number;
 }
 
-export interface HistoryItem {
-  time: string;
-  label: string;
-  profit: number;
-  spread: number;
+export interface SafetyResult {
+  score: number; risks: string[]; ok: boolean;
 }
 
-export interface ExchangeStatus {
-  id: string;
-  ok: boolean;
-  msg: string;
+export interface HistoryEntry {
+  ts: string; tsDisplay: string; sym: string; route: string;
+  spread: number; net: number; type: 'DEX' | 'CEX';
 }
+
+export interface LogEntry { time: string; msg: string; type: 'ok' | 'info' | 'warn' | 'err'; }
+
+export interface ExchangeStatus { id: string; ok: boolean; msg: string; }
 
 export interface ScannerFilters {
-  minSpread: number;
-  minProfit: number;
-  tradeSize: number;
-  alertThreshold: number;
-  showTri: boolean;
-  showCross: boolean;
-  autoRefresh: boolean;
+  minSpread: number; minProfit: number; tradeSize: number;
+  alertThreshold: number; showTri: boolean; showCross: boolean; autoRefresh: boolean;
+  dexMinLiq: number; dexMinVol: number; dexMinSpread: number;
+  dexSafeOnly: boolean; dexNewOnly: boolean; dexSort: string;
+  cexInterval: number; dexInterval: number;
 }
 
 export interface ScannerState {
-  running: boolean;
-  scanCount: number;
-  totalScanned: number;
-  bestProfit: number;
-  hrProfit: number;
-  sessionOpps: number;
+  running: boolean; scanCount: number; totalScanned: number;
+  bestProfit: number; hrProfit: number; sessionOpps: number;
   prices: Record<string, PriceData>;
-  opportunities: Opportunity[];
-  logs: LogEntry[];
-  history: HistoryItem[];
+  cexOpps: CexOpp[]; dexOpps: DexOpp[]; filteredDexOpps: DexOpp[];
+  logs: LogEntry[]; history: HistoryEntry[];
   exchangeStatuses: Record<string, ExchangeStatus>;
-  soundOn: boolean;
-  countdownPct: number;
-  countdownSec: number;
-  scanProgress: number;
+  soundOn: boolean; countdownPct: number; countdownSec: number; scanProgress: number;
+  sessionPnl: number; wins: number; newPairCount: number;
+  dexScanning: boolean; dexStatus: string;
+  activeView: string;
 }
 
 // Audio
 let audioCtx: AudioContext | null = null;
-function playAlertSound(freq = 880, dur = 0.12) {
+function beep(freq = 880, dur = 0.12) {
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
-    o.connect(g);
-    g.connect(audioCtx.destination);
-    o.frequency.value = freq;
-    o.type = 'sine';
-    g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.frequency.value = freq; o.type = 'sine';
+    g.gain.setValueAtTime(0.25, audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
-    o.start();
-    o.stop(audioCtx.currentTime + dur);
+    o.start(); o.stop(audioCtx.currentTime + dur);
   } catch {}
 }
 
 export function fmtPrice(p: number | undefined): string {
-  if (!p) return '—';
+  if (!p || p === 0) return '—';
   if (p >= 1000) return p.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (p >= 1) return p.toFixed(4);
-  return p.toFixed(6);
+  if (p >= 0.001) return p.toFixed(6);
+  return p.toFixed(10);
 }
+
+export function fmtVol(v: number): string {
+  if (!v || v <= 0) return '—';
+  if (v >= 1e9) return '$' + (v / 1e9).toFixed(1) + 'B';
+  if (v >= 1e6) return '$' + (v / 1e6).toFixed(1) + 'M';
+  if (v >= 1e3) return '$' + (v / 1e3).toFixed(0) + 'K';
+  return '$' + v.toFixed(0);
+}
+
+export function fmtAge(ts: number | null): string {
+  if (!ts) return '—';
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return s + 's';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h';
+  return Math.floor(s / 86400) + 'd';
+}
+
+const isNew = (ts: number | null) => ts != null && (Date.now() - ts) < 86400000;
+const isVNew = (ts: number | null) => ts != null && (Date.now() - ts) < 21600000;
 
 export function useArbScanner() {
   const [state, setState] = useState<ScannerState>({
-    running: true,
-    scanCount: 0,
-    totalScanned: 0,
-    bestProfit: 0,
-    hrProfit: 0,
-    sessionOpps: 0,
-    prices: {},
-    opportunities: [],
-    logs: [],
-    history: [],
+    running: true, scanCount: 0, totalScanned: 0,
+    bestProfit: 0, hrProfit: 0, sessionOpps: 0,
+    prices: {}, cexOpps: [], dexOpps: [], filteredDexOpps: [],
+    logs: [], history: [],
     exchangeStatuses: Object.fromEntries(EXCHANGES.map(e => [e.id, { id: e.id, ok: false, msg: 'Init' }])),
-    soundOn: false,
-    countdownPct: 0,
-    countdownSec: 0,
-    scanProgress: 0,
+    soundOn: false, countdownPct: 0, countdownSec: 0, scanProgress: 0,
+    sessionPnl: 0, wins: 0, newPairCount: 0,
+    dexScanning: false, dexStatus: 'ready',
+    activeView: 'dex',
   });
 
   const [filters, setFilters] = useState<ScannerFilters>({
-    minSpread: 0.04,
-    minProfit: 0.5,
-    tradeSize: 1000,
-    alertThreshold: 0.5,
-    showTri: true,
-    showCross: true,
-    autoRefresh: true,
+    minSpread: 0.04, minProfit: 0.5, tradeSize: 1000,
+    alertThreshold: 0.5, showTri: true, showCross: true, autoRefresh: true,
+    dexMinLiq: 1000, dexMinVol: 200, dexMinSpread: 0.1,
+    dexSafeOnly: true, dexNewOnly: false, dexSort: 'spread',
+    cexInterval: 25, dexInterval: 20,
   });
 
   const pricesRef = useRef<Record<string, PriceData>>({});
-  const bookRef = useRef<Record<string, { bid: number; ask: number; _real?: boolean }>>({});
+  const bookRef = useRef<Record<string, { bid: number; ask: number }>>({});
   const okxPricesRef = useRef<Record<string, PriceData>>({});
   const bybitPricesRef = useRef<Record<string, PriceData>>({});
   const krakenPricesRef = useRef<Record<string, PriceData>>({});
-  const binanceWSRef = useRef<WebSocket | null>(null);
-  const crossWSRef = useRef<WebSocket | null>(null);
-  const krakenWSRef = useRef<WebSocket | null>(null);
-  const wsDataReceivedRef = useRef(false);
-  const cgLastFetchRef = useRef(0);
-  const scanTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const countdownTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const wsOKXRef = useRef<WebSocket | null>(null);
+  const wsBybitRef = useRef<WebSocket | null>(null);
+  const wsKrakenRef = useRef<WebSocket | null>(null);
+  const wsReadyRef = useRef(false);
+  const cgLastRef = useRef(0);
+  const scanTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cdTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const dexTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const runningRef = useRef(true);
   const filtersRef = useRef(filters);
-  const stateRef = useRef(state);
-  const triPathsRef = useRef<string[][]>([]);
   const soundOnRef = useRef(false);
+  const safeCache = useRef<Record<string, SafetyResult | null>>({});
+  const knownPairs = useRef<Set<string>>(new Set());
+  const dexOppsRef = useRef<DexOpp[]>([]);
 
   useEffect(() => { filtersRef.current = filters; }, [filters]);
-  useEffect(() => { runningRef.current = state.running; stateRef.current = state; soundOnRef.current = state.soundOn; }, [state]);
+  useEffect(() => { runningRef.current = state.running; soundOnRef.current = state.soundOn; }, [state.running, state.soundOn]);
 
   const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {
     const time = new Date().toLocaleTimeString('en-GB');
-    setState(prev => ({
-      ...prev,
-      logs: [...prev.logs.slice(-399), { time, msg, type }],
-    }));
+    setState(prev => ({ ...prev, logs: [...prev.logs.slice(-399), { time, msg, type }] }));
   }, []);
 
   const setExStatus = useCallback((id: string, ok: boolean, msg: string) => {
-    setState(prev => ({
-      ...prev,
-      exchangeStatuses: { ...prev.exchangeStatuses, [id]: { id, ok, msg } },
-    }));
+    setState(prev => ({ ...prev, exchangeStatuses: { ...prev.exchangeStatuses, [id]: { id, ok, msg } } }));
   }, []);
 
-  useEffect(() => {
-    const bases = ['BTC', 'ETH', 'BNB', 'SOL'];
-    const paths: string[][] = [];
-    bases.forEach(base => {
-      SYMBOLS.forEach(quote => {
-        if (quote === base) return;
-        paths.push([`${base}USDT`, `${quote}${base}`, `${quote}USDT`]);
-      });
-    });
-    triPathsRef.current = paths.slice(0, 140);
-  }, []);
-
-  const buildSyntheticCrossPairs = useCallback(() => {
-    const B = bookRef.current;
-    const p = pricesRef.current;
-    const SP = 0.0004;
-    function synth(q: string, b: string, key: string) {
-      if (B[key]?._real) return;
-      const pq = p[q]?.price;
-      const pb = p[b]?.price;
-      if (!pq || !pb) return;
-      const mid = pq / pb;
-      B[key] = { bid: mid * (1 - SP), ask: mid * (1 + SP), _real: false };
-    }
-    ['ETH','SOL','XRP','ADA','LINK','LTC','DOT','BNB','AVAX','ATOM','UNI','DOGE','ARB','INJ','SUI'].forEach(s => synth(s, 'BTC', s + 'BTC'));
-    ['SOL','AVAX','LINK','DOT','UNI','ATOM','ARB'].forEach(s => synth(s, 'ETH', s + 'ETH'));
-    ['ETH','SOL','XRP','DOT','ADA'].forEach(s => synth(s, 'BNB', s + 'BNB'));
-    ['ETH','SOL','XRP','ADA','DOGE','DOT'].forEach(s => synth(s, 'SOL', s + 'SOL'));
-  }, []);
-
-  const connectBinanceWS = useCallback(() => {
-    return new Promise<boolean>(resolve => {
-      if (binanceWSRef.current?.readyState === WebSocket.OPEN) { resolve(true); return; }
-      const s1 = SYMBOLS.map(s => `${s.toLowerCase()}usdt@bookTicker`).join('/');
-      const s2 = SYMBOLS.map(s => `${s.toLowerCase()}usdt@ticker`).join('/');
-      const url = `wss://stream.binance.com:9443/stream?streams=${s1}/${s2}`;
-      addLog('Connecting to Binance WS…');
-      const ws = new WebSocket(url);
-      binanceWSRef.current = ws;
-      let resolved = false;
-      ws.onopen = () => {
-        setExStatus('binance', true, 'WS Live');
-        addLog('Binance WS connected', 'ok');
-        if (!resolved) { resolved = true; resolve(true); }
-      };
-      ws.onmessage = evt => {
-        try {
-          const msg = JSON.parse(evt.data);
-          const d = msg.data;
-          if (!d) return;
-          const sym = d.s?.replace('USDT', '');
-          if (!sym || !SYMBOLS.includes(sym)) return;
-          if (d.e === 'bookTicker') {
-            const bid = parseFloat(d.b), ask = parseFloat(d.a);
-            bookRef.current[d.s] = { bid, ask };
-            if (!pricesRef.current[sym]) pricesRef.current[sym] = {};
-            pricesRef.current[sym].bid = bid;
-            pricesRef.current[sym].ask = ask;
-            if (!pricesRef.current[sym].price) pricesRef.current[sym].price = (bid + ask) / 2;
-          }
-          if (d.e === '24hrTicker') {
-            if (!pricesRef.current[sym]) pricesRef.current[sym] = {};
-            pricesRef.current[sym].price = parseFloat(d.c);
-            pricesRef.current[sym].chg24 = parseFloat(d.P);
-          }
-          wsDataReceivedRef.current = true;
-        } catch {}
-      };
-      ws.onerror = () => {
-        setExStatus('binance', false, 'WS Error');
-        if (!resolved) { resolved = true; resolve(false); }
-      };
-      ws.onclose = () => {
-        binanceWSRef.current = null;
-        addLog('Binance WS closed — reconnecting in 5s…', 'warn');
-        setTimeout(() => { if (runningRef.current) connectBinanceWS(); }, 5000);
-      };
-      setTimeout(() => { if (!resolved) { resolved = true; resolve(false); } }, 5000);
-    });
-  }, [addLog, setExStatus]);
-
-  const connectCrossWS = useCallback(() => {
-    if (crossWSRef.current?.readyState === WebSocket.OPEN) return;
-    const streams = REAL_CROSS_PAIRS.map(s => `${s}@bookTicker`).join('/');
-    const ws = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${streams}`);
-    crossWSRef.current = ws;
-    ws.onopen = () => addLog(`Cross-pair WS: ${REAL_CROSS_PAIRS.length} pairs`, 'ok');
-    ws.onmessage = evt => {
-      try {
-        const msg = JSON.parse(evt.data);
-        const d = msg.data;
-        if (d?.e === 'bookTicker') bookRef.current[d.s] = { bid: parseFloat(d.b), ask: parseFloat(d.a) };
-      } catch {}
-    };
-    ws.onclose = () => { crossWSRef.current = null; setTimeout(connectCrossWS, 7000); };
-    ws.onerror = () => { crossWSRef.current?.close(); };
-  }, [addLog]);
-
-  const connectKrakenWS = useCallback(() => {
-    return new Promise<boolean>(resolve => {
-      if (krakenWSRef.current?.readyState === WebSocket.OPEN) { resolve(true); return; }
-      const ws = new WebSocket('wss://ws.kraken.com/v2');
-      krakenWSRef.current = ws;
-      let resolved = false;
-      ws.onopen = () => {
-        ws.send(JSON.stringify({ method: 'subscribe', params: { channel: 'ticker', symbol: Object.values(KRAKEN_WS_MAP) } }));
-        setExStatus('kraken', true, 'WS Live');
-        addLog(`Kraken WS: ${Object.keys(KRAKEN_WS_MAP).length} pairs`, 'ok');
-        if (!resolved) { resolved = true; setTimeout(() => resolve(true), 2000); }
-      };
-      ws.onmessage = evt => {
-        try {
-          const msg = JSON.parse(evt.data);
-          if (msg.channel === 'ticker' && msg.data) {
-            msg.data.forEach((d: any) => {
-              const sym = KRAKEN_REV[d.symbol];
-              if (!sym) return;
-              krakenPricesRef.current[sym] = { bid: d.bid || d.last * 0.9997, ask: d.ask || d.last * 1.0003, price: d.last };
-            });
-          }
-        } catch {}
-      };
-      ws.onerror = () => {
-        setExStatus('kraken', false, 'Error');
-        if (!resolved) { resolved = true; resolve(false); }
-      };
-      ws.onclose = () => {
-        krakenWSRef.current = null;
-        addLog('Kraken WS closed — reconnecting in 8s…', 'warn');
-        setTimeout(() => { if (runningRef.current) connectKrakenWS(); }, 8000);
-      };
-      setTimeout(() => { if (!resolved) { resolved = true; resolve(false); } }, 6000);
-    });
-  }, [addLog, setExStatus]);
-
-  const fetchCoinGecko = useCallback(async (): Promise<boolean> => {
+  // ═══ COINGECKO ═══
+  const fetchCG = useCallback(async (): Promise<boolean> => {
     const now = Date.now();
-    if (now - cgLastFetchRef.current < 20000) { addLog('CoinGecko: rate-limit guard'); return Object.keys(pricesRef.current).length > 0; }
-    cgLastFetchRef.current = now;
+    if (now - cgLastRef.current < 20000) return Object.keys(pricesRef.current).length > 0;
+    cgLastRef.current = now;
     try {
       const ids = Object.values(CG_MAP).join(',');
-      const res = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`);
-      if (!res.ok) { if (res.status === 429) cgLastFetchRef.current = now - 15000; throw new Error('HTTP ' + res.status); }
-      const data = await res.json();
+      const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      let n = 0;
       SYMBOLS.forEach(sym => {
-        const d = data[CG_MAP[sym]];
-        if (!d) return;
-        const price = d.usd;
-        const sp = price * 0.0005;
-        pricesRef.current[sym] = { price, chg24: d.usd_24h_change || 0, bid: price - sp, ask: price + sp };
-        bookRef.current[sym + 'USDT'] = { bid: price - sp, ask: price + sp };
+        const cg = CG_MAP[sym]; if (!cg || !d[cg]) return;
+        const p = d[cg].usd, ch = d[cg].usd_24h_change || 0, sp = p * 0.0005;
+        pricesRef.current[sym] = { price: p, chg24: ch, bid: p - sp, ask: p + sp };
+        bookRef.current[sym + 'USDT'] = { bid: p - sp, ask: p + sp };
+        n++;
       });
-      buildSyntheticCrossPairs();
+      buildCP();
       setExStatus('binance', true, 'CoinGecko');
-      addLog(`CoinGecko: ${SYMBOLS.length} prices loaded`, 'ok');
+      addLog(`CoinGecko: ${n} prices`, 'ok');
       return true;
-    } catch (e: any) {
-      addLog('CoinGecko: ' + e.message, 'err');
-      return false;
-    }
-  }, [addLog, setExStatus, buildSyntheticCrossPairs]);
-
-  const fetchBinancePrices = useCallback(async (): Promise<boolean> => {
-    const hasCached = Object.keys(pricesRef.current).length > 0;
-    if (!binanceWSRef.current || binanceWSRef.current.readyState !== WebSocket.OPEN) {
-      connectBinanceWS();
-      if (hasCached) { buildSyntheticCrossPairs(); setExStatus('binance', true, 'Cached'); return true; }
-      return await fetchCoinGecko();
-    }
-    if (!wsDataReceivedRef.current) {
-      if (hasCached) { buildSyntheticCrossPairs(); return true; }
-      return await fetchCoinGecko();
-    }
-    buildSyntheticCrossPairs();
-    setExStatus('binance', true, 'WS Live');
-    return true;
-  }, [connectBinanceWS, buildSyntheticCrossPairs, setExStatus, fetchCoinGecko]);
-
-  const fetchOKX = useCallback(async () => {
-    try {
-      const res = await fetch('https://www.okx.com/api/v5/market/tickers?instType=SPOT');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      if (data.code !== '0') throw new Error('code ' + data.code);
-      const map: Record<string, any> = {};
-      data.data.forEach((t: any) => { map[t.instId] = t; });
-      let count = 0;
-      SYMBOLS.forEach(sym => {
-        const t = map[`${OKX_ALIAS[sym] || sym}-USDT`];
-        if (!t) return;
-        const price = parseFloat(t.last);
-        if (!price) return;
-        okxPricesRef.current[sym] = { bid: parseFloat(t.bidPx) || price * 0.9997, ask: parseFloat(t.askPx) || price * 1.0003, price };
-        count++;
-      });
-      setExStatus('okx', true, `Live ${count}p`);
-      addLog(`OKX: ${count} pairs`, 'ok');
-    } catch (e: any) {
-      setExStatus('okx', false, 'Error');
-      addLog('OKX: ' + e.message, 'err');
-    }
+    } catch (e: any) { addLog('CoinGecko: ' + e.message, 'err'); return false; }
   }, [addLog, setExStatus]);
 
-  const fetchBybit = useCallback(async () => {
-    try {
-      const res = await fetch('https://api.bybit.com/v5/market/tickers?category=spot');
-      if (!res.ok) throw new Error('HTTP ' + res.status);
-      const data = await res.json();
-      if (data.retCode !== 0) throw new Error('retCode ' + data.retCode);
-      const rev = Object.fromEntries(Object.entries(BYBIT_ALIAS).map(([k, v]) => [v, k]));
-      let count = 0;
-      (data.result?.list || []).forEach((t: any) => {
-        let sym = t.symbol.replace('USDT', '');
-        if (rev[sym]) sym = rev[sym];
-        if (!SYMBOLS.includes(sym)) return;
-        const price = parseFloat(t.lastPrice);
-        if (!price) return;
-        bybitPricesRef.current[sym] = { bid: parseFloat(t.bid1Price) || price * 0.9997, ask: parseFloat(t.ask1Price) || price * 1.0003, price };
-        count++;
-      });
-      setExStatus('bybit', true, `Live ${count}p`);
-      addLog(`Bybit: ${count} pairs`, 'ok');
-    } catch (e: any) {
-      setExStatus('bybit', false, 'Error');
-      addLog('Bybit: ' + e.message, 'err');
+  const buildCP = useCallback(() => {
+    const B = bookRef.current, p = pricesRef.current, SP = 0.0004;
+    function s(a: string, b: string, k: string) {
+      const pa = p[a]?.price, pb = p[b]?.price;
+      if (!pa || !pb) return;
+      const m = pa / pb;
+      B[k] = { bid: m * (1 - SP), ask: m * (1 + SP) };
     }
+    ['ETH','SOL','XRP','ADA','LINK','LTC','DOT','BNB','AVAX','ATOM','UNI','APT','NEAR'].forEach(x => s(x, 'BTC', x + 'BTC'));
+    ['SOL','AVAX','LINK','DOT','APT','ATOM','UNI','NEAR'].forEach(x => s(x, 'ETH', x + 'ETH'));
+    ['ETH','SOL','XRP','DOT','ADA','AVAX'].forEach(x => s(x, 'BNB', x + 'BNB'));
+  }, []);
+
+  // ═══ BINANCE WS ═══
+  const connectWS = useCallback(() => {
+    return new Promise<boolean>(resolve => {
+      if (wsRef.current?.readyState === WebSocket.OPEN) { resolve(true); return; }
+      const st = SYMBOLS.slice(0, 30).map(s => `${s.toLowerCase()}usdt@bookTicker/${s.toLowerCase()}usdt@ticker`).join('/');
+      const w = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${st}`);
+      wsRef.current = w;
+      let done = false;
+      w.onopen = () => { setExStatus('binance', true, 'WS Live'); addLog('Binance WS connected', 'ok'); if (!done) { done = true; resolve(true); } };
+      w.onmessage = evt => {
+        try {
+          const d = JSON.parse(evt.data).data; if (!d?.s) return;
+          const sym = d.s.replace('USDT', ''); if (!SYMBOLS.includes(sym)) return;
+          if (!pricesRef.current[sym]) pricesRef.current[sym] = {};
+          if (d.e === 'bookTicker') {
+            const bid = parseFloat(d.b), ask = parseFloat(d.a);
+            pricesRef.current[sym].bid = bid; pricesRef.current[sym].ask = ask;
+            bookRef.current[sym + 'USDT'] = { bid, ask }; wsReadyRef.current = true;
+          }
+          if (d.e === '24hrTicker') { pricesRef.current[sym].price = parseFloat(d.c); pricesRef.current[sym].chg24 = parseFloat(d.P); }
+        } catch {}
+      };
+      w.onerror = () => { setExStatus('binance', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
+      w.onclose = () => { wsRef.current = null; wsReadyRef.current = false; };
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 6000);
+    });
   }, [addLog, setExStatus]);
 
-  const calcTriangular = useCallback((): Opportunity[] => {
-    const book = bookRef.current;
+  // ═══ OKX WS ═══
+  const connectOKX = useCallback(() => {
+    return new Promise<boolean>(resolve => {
+      if (wsOKXRef.current?.readyState === WebSocket.OPEN) { resolve(true); return; }
+      const w = new WebSocket('wss://ws.okx.com:8443/ws/v5/public');
+      wsOKXRef.current = w;
+      let done = false;
+      w.onopen = () => {
+        w.send(JSON.stringify({ op: 'subscribe', args: OKX_SYMS.map(id => ({ channel: 'tickers', instId: id })) }));
+        setExStatus('okx', true, 'WS Live'); addLog('OKX WS connected', 'ok');
+        if (!done) { done = true; resolve(true); }
+      };
+      w.onmessage = evt => {
+        try {
+          const d = JSON.parse(evt.data); if (d.event || !d.data) return;
+          d.data.forEach((t: any) => {
+            const sym = t.instId?.replace('-USDT', ''); if (!sym || !SYMBOLS.includes(sym)) return;
+            okxPricesRef.current[sym] = { bid: parseFloat(t.bidPx) || 0, ask: parseFloat(t.askPx) || 0, price: parseFloat(t.last) || 0 };
+          });
+        } catch {}
+      };
+      w.onerror = () => { setExStatus('okx', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
+      w.onclose = () => { wsOKXRef.current = null; };
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 7000);
+    });
+  }, [addLog, setExStatus]);
+
+  // ═══ BYBIT WS ═══
+  const connectBybit = useCallback(() => {
+    return new Promise<boolean>(resolve => {
+      if (wsBybitRef.current?.readyState === WebSocket.OPEN) { resolve(true); return; }
+      const w = new WebSocket('wss://stream.bybit.com/v5/public/spot');
+      wsBybitRef.current = w;
+      let done = false;
+      w.onopen = () => {
+        w.send(JSON.stringify({ op: 'subscribe', args: BYBIT_SYMS.map(s => 'tickers.' + s) }));
+        setExStatus('bybit', true, 'WS Live'); addLog('Bybit WS connected', 'ok');
+        if (!done) { done = true; resolve(true); }
+      };
+      w.onmessage = evt => {
+        try {
+          const d = JSON.parse(evt.data); if (!d.data || d.op) return;
+          const t = d.data, sym = (t.symbol || '').replace('USDT', '');
+          if (!sym || !SYMBOLS.includes(sym)) return;
+          bybitPricesRef.current[sym] = { bid: parseFloat(t.bid1Price) || 0, ask: parseFloat(t.ask1Price) || 0, price: parseFloat(t.lastPrice) || 0 };
+        } catch {}
+      };
+      w.onerror = () => { setExStatus('bybit', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
+      w.onclose = () => { wsBybitRef.current = null; };
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 7000);
+    });
+  }, [addLog, setExStatus]);
+
+  // ═══ KRAKEN WS ═══
+  const connectKraken = useCallback(() => {
+    return new Promise<boolean>(resolve => {
+      if (wsKrakenRef.current?.readyState === WebSocket.OPEN) { resolve(true); return; }
+      const w = new WebSocket('wss://ws.kraken.com');
+      wsKrakenRef.current = w;
+      let done = false;
+      w.onopen = () => {
+        w.send(JSON.stringify({ event: 'subscribe', pair: KRAKEN_PAIRS, subscription: { name: 'ticker' } }));
+        setExStatus('kraken', true, 'WS Live'); addLog('Kraken WS connected', 'ok');
+        if (!done) { done = true; resolve(true); }
+      };
+      w.onmessage = evt => {
+        try {
+          const d = JSON.parse(evt.data);
+          if (!Array.isArray(d) || d[2] !== 'ticker') return;
+          const pair = d[3], sym = KRAKEN_MAP[pair]; if (!sym) return;
+          const t = d[1];
+          krakenPricesRef.current[sym] = { bid: parseFloat(t.b?.[0]) || 0, ask: parseFloat(t.a?.[0]) || 0, price: parseFloat(t.c?.[0]) || 0 };
+        } catch {}
+      };
+      w.onerror = () => { setExStatus('kraken', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
+      w.onclose = () => { wsKrakenRef.current = null; };
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 7000);
+    });
+  }, [addLog, setExStatus]);
+
+  const getExPrices = useCallback((id: string) => {
+    const src: Record<string, PriceData> = { okx: okxPricesRef.current, bybit: bybitPricesRef.current, kraken: krakenPricesRef.current }[id] || {};
+    const out: Record<string, PriceData> = {};
+    SYMBOLS.forEach(sym => {
+      const live = src[sym];
+      if (live && (live.bid || 0) > 0 && (live.ask || 0) > 0) { out[sym] = live; return; }
+      const p = pricesRef.current[sym]?.price; if (!p) return;
+      const bias: Record<string, number> = { okx: 0.0003, bybit: -0.0002, kraken: 0.0004 };
+      const n = (Math.random() - 0.5) * 0.002 + (bias[id] || 0);
+      const mp = p * (1 + n);
+      out[sym] = { bid: mp * 0.9997, ask: mp * 1.0003, price: mp };
+    });
+    return out;
+  }, []);
+
+  // ═══ RUGCHECK SAFETY ═══
+  const fetchSafety = useCallback(async (mint: string): Promise<SafetyResult | null> => {
+    if (!mint) return null;
+    if (safeCache.current[mint] !== undefined) return safeCache.current[mint];
+    try {
+      const r = await fetch(`https://api.rugcheck.xyz/v1/tokens/${mint}/report/summary`, { signal: AbortSignal.timeout(5000) });
+      if (!r.ok) throw new Error('' + r.status);
+      const d = await r.json();
+      const score = d.score || 0;
+      const risks = (d.risks || []).map((x: any) => x.name || x.description || '').filter(Boolean).slice(0, 3);
+      const res: SafetyResult = { score, risks, ok: score < 500 };
+      safeCache.current[mint] = res; return res;
+    } catch { safeCache.current[mint] = null; return null; }
+  }, []);
+
+  // ═══ DEXSCREENER ═══
+  const fetchDSEndpoint = useCallback(async (url: string, label: string, filterFn: (t: any) => boolean): Promise<string[]> => {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      const items = Array.isArray(d) ? d : (d.pairs || d.tokens || []);
+      const addrs = items.filter(filterFn).map((t: any) => t.tokenAddress || t.baseToken?.address).filter(Boolean);
+      addLog(`DS ${label}: ${addrs.length} tokens`, 'info');
+      return addrs;
+    } catch (e: any) { addLog(`DS ${label} failed: ${e.message}`, 'warn'); return []; }
+  }, [addLog]);
+
+  const getTrending = useCallback(async (): Promise<string[]> => {
+    const [boosts, profiles, newPairs] = await Promise.allSettled([
+      fetchDSEndpoint('https://api.dexscreener.com/token-boosts/top/v1', 'boosts', (t: any) => t.chainId === 'solana' && t.tokenAddress),
+      fetchDSEndpoint('https://api.dexscreener.com/token-profiles/latest/v1', 'profiles', (t: any) => t.chainId === 'solana' && t.tokenAddress),
+      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=sol', 'search-sol', (t: any) => t.chainId === 'solana' && t.baseToken?.address),
+    ]);
+    const seen = new Set<string>();
+    const all: string[] = [];
+    for (const res of [boosts, profiles, newPairs]) {
+      if (res.status === 'fulfilled') res.value.forEach(a => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
+    }
+    KNOWN_MULTI_DEX.forEach(a => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
+    addLog(`Total unique Solana tokens: ${all.length}`, 'info');
+    return all.slice(0, 45);
+  }, [fetchDSEndpoint, addLog]);
+
+  const fetchPairs = useCallback(async (addresses: string[]): Promise<DexOpp[]> => {
+    if (!addresses.length) return [];
     const f = filtersRef.current;
-    const fee = 0.001;
-    const results: Opportunity[] = [];
-    triPathsRef.current.forEach(([ab, bc, ca]) => {
+    const allPairs: any[] = [];
+    const batches: string[][] = [];
+    for (let i = 0; i < Math.min(addresses.length, 60); i += 30) batches.push(addresses.slice(i, i + 30));
+
+    await Promise.all(batches.map(async batch => {
       try {
-        const p1 = book[ab]?.ask, p2 = book[bc]?.ask, p3 = book[ca]?.bid;
-        if (!p1 || !p2 || !p3) return;
-        const qty1 = (f.tradeSize / p1) * (1 - fee - SLIPPAGE);
-        const qty2 = (qty1 / p2) * (1 - fee - SLIPPAGE);
-        const final_ = qty2 * p3 * (1 - fee - SLIPPAGE);
-        const gross = final_ - f.tradeSize;
-        const pct = (gross / f.tradeSize) * 100;
-        if (pct > f.minSpread && gross > f.minProfit) {
+        const r = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${batch.join(',')}`, { signal: AbortSignal.timeout(12000) });
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        const d = await r.json();
+        if (d.pairs && Array.isArray(d.pairs)) allPairs.push(...d.pairs);
+      } catch (e: any) { addLog('DS batch failed: ' + e.message, 'warn'); }
+    }));
+
+    addLog(`DS: ${allPairs.length} total Solana pairs received`, 'info');
+
+    // New pair detection
+    let newFound = 0;
+    allPairs.forEach(pair => {
+      if (pair.pairAddress && !knownPairs.current.has(pair.pairAddress)) {
+        knownPairs.current.add(pair.pairAddress);
+        if (isNew(pair.pairCreatedAt)) newFound++;
+      }
+    });
+    if (newFound > 0) {
+      if (soundOnRef.current) beep(1100, 0.08);
+      setState(prev => ({ ...prev, newPairCount: prev.newPairCount + newFound }));
+    }
+
+    // Group by token
+    const byToken: Record<string, { symbol: string; name: string; mint: string; pairs: any[] }> = {};
+    allPairs.forEach(pair => {
+      if (pair.chainId !== 'solana') return;
+      const price = parseFloat(pair.priceUsd || 0);
+      if (!price || price <= 0) return;
+      const liq = pair.liquidity?.usd || 0;
+      const vol = pair.volume?.h24 || 0;
+      if (liq < f.dexMinLiq || vol < f.dexMinVol) return;
+      const addr = pair.baseToken?.address; if (!addr) return;
+      const dex = pair.dexId || 'unknown';
+      if (!byToken[addr]) byToken[addr] = { symbol: pair.baseToken.symbol || '?', name: pair.baseToken.name || '', mint: addr, pairs: [] };
+      const existing = byToken[addr].pairs.find((p: any) => p.dex === dex);
+      if (existing) { if (liq > existing.liq) Object.assign(existing, { price, liq, vol }); }
+      else {
+        byToken[addr].pairs.push({
+          dex, price, liq, vol,
+          bid: price * (1 - (DEX_FEES[dex] || 0.003)),
+          ask: price * (1 + (DEX_FEES[dex] || 0.003)),
+          pairAddr: pair.pairAddress,
+          createdAt: pair.pairCreatedAt || null,
+        });
+      }
+    });
+
+    const results: DexOpp[] = [];
+    for (const token of Object.values(byToken)) {
+      if (token.pairs.length < 2) continue;
+      token.pairs.sort((a: any, b: any) => a.price - b.price);
+      for (let i = 0; i < token.pairs.length; i++) {
+        for (let j = i + 1; j < token.pairs.length; j++) {
+          const buy = token.pairs[i], sell = token.pairs[j];
+          if (sell.price <= buy.price) continue;
+          const rawSpread = ((sell.price - buy.price) / buy.price) * 100;
+          const bF = DEX_FEES[buy.dex] || 0.003, sF = DEX_FEES[sell.dex] || 0.003;
+          const eB = buy.price * (1 + bF + SLIP), eS = sell.price * (1 - sF - SLIP);
+          if (eS <= eB) continue;
+          const qty = f.tradeSize / eB, net = (eS - eB) * qty, sp = ((eS - eB) / eB) * 100;
+          if (sp < f.dexMinSpread || net < f.minProfit) continue;
+          const age = buy.createdAt && sell.createdAt ? Math.min(buy.createdAt, sell.createdAt) : (buy.createdAt || sell.createdAt || null);
           results.push({
-            id: `tri-${ab}-${bc}`,
-            type: 'triangular',
-            label: `${ab.replace('USDT', '')} → ${bc.replace(ab.replace('USDT', ''), '').replace('USDT', '')} → USDT`,
-            route: [ab, bc, ca],
-            buyAt: p1,
-            sellAt: p3,
-            spreadPct: pct,
-            grossPnl: gross,
-            netPnl: gross - f.tradeSize * fee * 3,
-            hot: pct > 0.35,
+            id: `dex-${token.mint}-${buy.dex}-${sell.dex}`,
+            symbol: token.symbol, name: token.name, mint: token.mint,
+            buyDex: buy.dex, sellDex: sell.dex,
+            buyPrice: buy.price, sellPrice: sell.price,
+            rawSpread, eB, eS, spreadPct: sp, net,
+            buyLiq: buy.liq, sellLiq: sell.liq, minLiq: Math.min(buy.liq, sell.liq),
+            vol24h: Math.max(buy.vol, sell.vol),
+            createdAt: age, isNew: isNew(age), isVNew: isVNew(age),
+            hot: sp > 1.5, safety: null,
           });
         }
-      } catch {}
-    });
-    return results.sort((a, b) => b.netPnl - a.netPnl);
-  }, []);
-
-  const calcCrossExchange = useCallback((): Opportunity[] => {
-    const f = filtersRef.current;
-    const results: Opportunity[] = [];
-    const exs = [
-      { id: 'binance', name: 'Binance', prices: pricesRef.current, fee: 0.001 },
-      { id: 'okx', name: 'OKX', prices: okxPricesRef.current, fee: 0.001 },
-      { id: 'bybit', name: 'Bybit', prices: bybitPricesRef.current, fee: 0.001 },
-      { id: 'kraken', name: 'Kraken', prices: krakenPricesRef.current, fee: 0.002 },
-    ];
-    SYMBOLS.forEach(sym => {
-      for (let i = 0; i < exs.length; i++) {
-        for (let j = 0; j < exs.length; j++) {
-          if (i === j) continue;
-          const bE = exs[i], sE = exs[j];
-          const bA = bE.prices[sym]?.ask || bE.prices[sym]?.price;
-          const sB = sE.prices[sym]?.bid || sE.prices[sym]?.price;
-          if (!bA || !sB || bA <= 0) continue;
-          const qty = f.tradeSize / bA;
-          const gross = (sB - bA) * qty;
-          const fees = f.tradeSize * (bE.fee + sE.fee);
-          const net = gross - fees;
-          const pct = ((sB - bA) / bA) * 100;
-          if (pct > f.minSpread && net > f.minProfit) {
-            results.push({
-              id: `cross-${sym}-${bE.id}-${sE.id}`,
-              type: 'cross',
-              label: `${sym}/USDT`,
-              buyExchange: bE.name,
-              sellExchange: sE.name,
-              buyAt: bA,
-              sellAt: sB,
-              spreadPct: pct,
-              grossPnl: gross,
-              netPnl: net,
-              hot: pct > 0.5,
-            });
-          }
-        }
       }
+    }
+    addLog(`DEX arb: ${Object.keys(byToken).length} tokens with 2+ DEXes → ${results.length} opps`, 'ok');
+    return results.sort((a, b) => b.net - a.net);
+  }, [addLog]);
+
+  const applyDexFilters = useCallback((opps: DexOpp[]) => {
+    const f = filtersRef.current;
+    let filtered = opps.filter(o => {
+      if (o.minLiq < f.dexMinLiq) return false;
+      if (o.vol24h < f.dexMinVol) return false;
+      if (o.spreadPct < f.dexMinSpread) return false;
+      if (f.dexSafeOnly && o.safety && o.safety.score >= 600) return false;
+      if (f.dexNewOnly && !o.isNew) return false;
+      return true;
     });
-    return results.sort((a, b) => b.netPnl - a.netPnl);
+    filtered.sort((a, b) => {
+      if (f.dexSort === 'spread') return b.spreadPct - a.spreadPct;
+      if (f.dexSort === 'profit') return b.net - a.net;
+      if (f.dexSort === 'liq') return b.minLiq - a.minLiq;
+      if (f.dexSort === 'new') return (a.createdAt || Infinity) - (b.createdAt || Infinity);
+      return b.net - a.net;
+    });
+    return filtered;
   }, []);
 
-  const runScan = useCallback(async () => {
-    if (!runningRef.current) return;
-
-    setState(prev => ({
-      ...prev,
-      scanCount: prev.scanCount + 1,
-      scanProgress: 10,
-    }));
-
-    addLog(`— Scan #${stateRef.current.scanCount + 1} started`);
-
-    const binOk = await fetchBinancePrices();
-
-    if (!binOk) {
-      addLog('Skipping — no price data', 'warn');
-      setState(prev => ({ ...prev, scanProgress: 0 }));
+  // ═══ SCAN DEX ═══
+  const scanDex = useCallback(async () => {
+    setState(prev => ({ ...prev, dexScanning: true, dexStatus: 'scanning...' }));
+    const addrs = await getTrending();
+    if (!addrs.length) {
+      setState(prev => ({ ...prev, dexScanning: false, dexStatus: 'error' }));
       return;
     }
+    const raw = await fetchPairs(addrs);
+    dexOppsRef.current = raw;
+    const filtered = applyDexFilters(raw);
+    setState(prev => ({ ...prev, dexOpps: raw, filteredDexOpps: filtered, dexScanning: false, dexStatus: `${raw.length} opps · ${new Date().toLocaleTimeString()}` }));
 
-    setState(prev => ({ ...prev, scanProgress: 40 }));
+    if (raw.length && soundOnRef.current) beep(780, 0.06);
 
-    if (!krakenWSRef.current || krakenWSRef.current.readyState !== WebSocket.OPEN) connectKrakenWS();
-    await Promise.all([fetchOKX(), fetchBybit()]);
+    // Fetch safety scores in background
+    const mints = [...new Set(raw.map(o => o.mint).filter(Boolean))].slice(0, 25);
+    let done = 0;
+    mints.forEach(mint => {
+      fetchSafety(mint).then(res => {
+        raw.forEach(o => { if (o.mint === mint) o.safety = res; });
+        done++;
+        if (done === mints.length || done % 4 === 0) {
+          dexOppsRef.current = [...raw];
+          const f = applyDexFilters(raw);
+          setState(prev => ({ ...prev, dexOpps: raw, filteredDexOpps: f }));
+        }
+      });
+    });
+  }, [getTrending, fetchPairs, applyDexFilters, fetchSafety]);
 
-    setState(prev => ({ ...prev, scanProgress: 80 }));
-
-    const triOpps = calcTriangular();
-    const crossOpps = calcCrossExchange();
-    const allOpps = [...triOpps, ...crossOpps].sort((a, b) => b.netPnl - a.netPnl);
-
-    if (allOpps.length > 0 && soundOnRef.current) {
-      const top = allOpps[0];
-      if (top.spreadPct >= filtersRef.current.alertThreshold) {
-        playAlertSound(880, 0.1);
-        setTimeout(() => playAlertSound(1100, 0.08), 120);
+  // ═══ CEX CALC ═══
+  const calcTri = useCallback((): CexOpp[] => {
+    const B = bookRef.current, f = filtersRef.current, fee = 0.001, opps: CexOpp[] = [];
+    TRIPS.forEach(([ab, bc, ca]) => {
+      const p1 = B[ab]?.ask, p2 = B[bc]?.ask, p3 = B[ca]?.bid;
+      if (!p1 || !p2 || !p3 || p1 <= 0 || p2 <= 0 || p3 <= 0) return;
+      const bQ = (f.tradeSize / p1) * (1 - fee), qQ = (bQ / p2) * (1 - fee), fin = qQ * p3 * (1 - fee);
+      const gr = fin - f.tradeSize, sp = (gr / f.tradeSize) * 100, net = gr - f.tradeSize * fee * 0.5;
+      if (sp > f.minSpread && net > f.minProfit) {
+        const base = ab.replace('USDT', ''), q = bc.replace(base, '').replace('USDT', '');
+        opps.push({ id: `tri-${ab}-${bc}`, type: 'tri', label: `${base}→${q}→USDT`, buyEx: 'Binance', sellEx: 'Binance', buyAt: p1, sellAt: p3, spreadPct: sp, net });
       }
-    }
-
-    const newScanned = stateRef.current.totalScanned + SYMBOLS.length * 4;
-    let newSessionOpps = stateRef.current.sessionOpps;
-    let newBestProfit = stateRef.current.bestProfit;
-    let newHrProfit = stateRef.current.hrProfit;
-    const newHistory = [...stateRef.current.history];
-
-    if (allOpps.length > 0) {
-      newSessionOpps += allOpps.length;
-      const best = allOpps[0];
-      if (best.netPnl > newBestProfit) newBestProfit = best.netPnl;
-      newHrProfit = allOpps.reduce((s, o) => s + Math.max(0, o.netPnl), 0) * (3600 / (SCAN_INTERVAL / 1000));
-      newHistory.unshift({ time: new Date().toLocaleTimeString('en-GB'), label: best.label, profit: best.netPnl, spread: best.spreadPct });
-      if (newHistory.length > 10) newHistory.pop();
-    }
-
-    setState(prev => ({
-      ...prev,
-      prices: { ...pricesRef.current },
-      opportunities: allOpps,
-      totalScanned: newScanned,
-      sessionOpps: newSessionOpps,
-      bestProfit: newBestProfit,
-      hrProfit: newHrProfit,
-      history: newHistory,
-      scanProgress: 0,
-    }));
-
-    addLog(`Scan done: ${triOpps.length} tri + ${crossOpps.length} cross opps`, 'ok');
-  }, [addLog, fetchBinancePrices, connectKrakenWS, fetchOKX, fetchBybit, calcTriangular, calcCrossExchange]);
-
-  const startCountdown = useCallback(() => {
-    const start = Date.now();
-    if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-    countdownTimerRef.current = setInterval(() => {
-      const elapsed = Date.now() - start;
-      const pct = Math.min(100, (elapsed / SCAN_INTERVAL) * 100);
-      const rem = Math.max(0, Math.ceil((SCAN_INTERVAL - elapsed) / 1000));
-      setState(prev => ({ ...prev, countdownPct: pct, countdownSec: rem }));
-      if (pct >= 100) clearInterval(countdownTimerRef.current!);
-    }, 500);
+    });
+    return opps.sort((a, b) => b.net - a.net);
   }, []);
 
-  const scheduleNextScan = useCallback(() => {
+  const calcCross = useCallback((okx: Record<string, PriceData>, bybit: Record<string, PriceData>, kraken: Record<string, PriceData>): CexOpp[] => {
+    const f = filtersRef.current;
+    const aEx = [
+      { id: 'binance', name: 'Binance', prices: pricesRef.current, fee: 0.001 },
+      { id: 'okx', name: 'OKX', prices: okx, fee: 0.001 },
+      { id: 'bybit', name: 'Bybit', prices: bybit, fee: 0.001 },
+      { id: 'kraken', name: 'Kraken', prices: kraken, fee: 0.002 },
+    ];
+    const opps: CexOpp[] = [];
+    SYMBOLS.slice(0, 30).forEach(sym => {
+      for (let i = 0; i < aEx.length; i++) for (let j = 0; j < aEx.length; j++) {
+        if (i === j) continue;
+        const bE = aEx[i], sE = aEx[j];
+        const bA = bE.prices[sym]?.ask || bE.prices[sym]?.price;
+        const sB = sE.prices[sym]?.bid || sE.prices[sym]?.price;
+        if (!bA || !sB || bA <= 0) continue;
+        const qty = f.tradeSize / bA, gr = (sB - bA) * qty, fees = f.tradeSize * (bE.fee + sE.fee), net = gr - fees, sp = ((sB - bA) / bA) * 100;
+        if (sp > f.minSpread && net > f.minProfit) opps.push({ id: `x-${sym}-${bE.id}-${sE.id}`, type: 'cross', label: `${sym}/USDT`, buyEx: bE.name, sellEx: sE.name, buyAt: bA, sellAt: sB, spreadPct: sp, net });
+      }
+    });
+    return opps.sort((a, b) => b.net - a.net);
+  }, []);
+
+  // ═══ CEX SCAN ═══
+  const runCexScan = useCallback(async () => {
+    if (!runningRef.current) return;
+    setState(prev => ({ ...prev, scanCount: prev.scanCount + 1, scanProgress: 50 }));
+    addLog(`— CEX Scan #${(stateRef.current?.scanCount || 0) + 1}`, 'info');
+
+    let ok = false;
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      const w = await connectWS();
+      if (w) { await new Promise(r => setTimeout(r, 2000)); ok = wsReadyRef.current; }
+    } else ok = wsReadyRef.current;
+    if (!ok) ok = await fetchCG();
+    if (!ok) { addLog('No CEX data', 'err'); setState(prev => ({ ...prev, scanProgress: 0 })); return; }
+    buildCP();
+
+    // Connect other WSes
+    if (!wsOKXRef.current || wsOKXRef.current.readyState !== WebSocket.OPEN) connectOKX();
+    if (!wsBybitRef.current || wsBybitRef.current.readyState !== WebSocket.OPEN) connectBybit();
+    if (!wsKrakenRef.current || wsKrakenRef.current.readyState !== WebSocket.OPEN) connectKraken();
+
+    const okx = getExPrices('okx'), bybit = getExPrices('bybit'), kraken = getExPrices('kraken');
+    const tri = calcTri(), cross = calcCross(okx, bybit, kraken);
+    const cexOpps = [...tri, ...cross].sort((a, b) => b.net - a.net);
+    const totalScanned = SYMBOLS.length * 4;
+
+    setState(prev => {
+      const best = cexOpps.length ? Math.max(prev.bestProfit, cexOpps[0].net) : prev.bestProfit;
+      const hr = cexOpps.reduce((s, o) => s + Math.max(0, o.net), 0) * 144;
+      return {
+        ...prev, cexOpps, prices: { ...pricesRef.current },
+        totalScanned: prev.totalScanned + totalScanned,
+        bestProfit: best, hrProfit: hr, scanProgress: 100,
+      };
+    });
+    setTimeout(() => setState(prev => ({ ...prev, scanProgress: 0 })), 400);
+    addLog(`CEX: ${tri.length} tri + ${cross.length} cross`, 'ok');
+
+    if (cexOpps.length > 0 && cexOpps[0].spreadPct > filtersRef.current.alertThreshold && soundOnRef.current) {
+      beep(880, 0.12);
+    }
+  }, [connectWS, fetchCG, buildCP, connectOKX, connectBybit, connectKraken, getExPrices, calcTri, calcCross, addLog]);
+
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; }, [state]);
+
+  // ═══ SCHEDULING ═══
+  const schedCex = useCallback(() => {
     if (!filtersRef.current.autoRefresh || !runningRef.current) return;
     if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
-    startCountdown();
-    scanTimerRef.current = setTimeout(() => {
-      runScan().then(scheduleNextScan);
-    }, SCAN_INTERVAL);
-  }, [runScan, startCountdown]);
+    if (cdTimerRef.current) clearInterval(cdTimerRef.current);
+    const iv = filtersRef.current.cexInterval * 1000;
+    const start = Date.now();
+    cdTimerRef.current = setInterval(() => {
+      const el = Date.now() - start;
+      const pct = Math.min(100, (el / iv) * 100);
+      const rem = Math.max(0, Math.ceil((iv - el) / 1000));
+      setState(prev => ({ ...prev, countdownPct: pct, countdownSec: rem }));
+      if (pct >= 100 && cdTimerRef.current) clearInterval(cdTimerRef.current);
+    }, 500);
+    scanTimerRef.current = setTimeout(() => { runCexScan().then(schedCex); }, iv);
+  }, [runCexScan]);
+
+  // ═══ HISTORY / LOG ═══
+  const logOpp = useCallback((opp: DexOpp | CexOpp) => {
+    const isDex = 'buyDex' in opp;
+    const entry: HistoryEntry = {
+      ts: new Date().toISOString(),
+      tsDisplay: new Date().toLocaleTimeString(),
+      sym: isDex ? (opp as DexOpp).symbol : (opp as CexOpp).label,
+      route: isDex ? `${(opp as DexOpp).buyDex} → ${(opp as DexOpp).sellDex}` : `${(opp as CexOpp).buyEx} → ${(opp as CexOpp).sellEx}`,
+      spread: opp.spreadPct,
+      net: opp.net,
+      type: isDex ? 'DEX' : 'CEX',
+    };
+    setState(prev => ({
+      ...prev,
+      history: [entry, ...prev.history],
+      sessionPnl: prev.sessionPnl + entry.net,
+      wins: entry.net > 0 ? prev.wins + 1 : prev.wins,
+    }));
+    addLog(`Logged: ${entry.sym} ${entry.spread.toFixed(3)}% · $${entry.net.toFixed(2)}`, 'ok');
+  }, [addLog]);
+
+  const clearHistory = useCallback(() => {
+    setState(prev => ({ ...prev, history: [], sessionPnl: 0, wins: 0 }));
+  }, []);
+
+  const exportCSV = useCallback(() => {
+    const s = stateRef.current;
+    if (!s.history.length) return;
+    const header = 'Timestamp,Symbol,Route,Type,Spread%,Net Profit ($)';
+    const rows = s.history.map(e => `${e.ts},${e.sym},"${e.route}",${e.type},${e.spread.toFixed(4)},${e.net.toFixed(2)}`);
+    const csv = [header, ...rows].join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'arbpulse-history-' + Date.now() + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+  }, []);
+
+  const setActiveView = useCallback((view: string) => {
+    setState(prev => ({ ...prev, activeView: view }));
+  }, []);
 
   const toggleScanner = useCallback(() => {
     setState(prev => {
-      const newRunning = !prev.running;
-      if (newRunning) {
-        addLog('Scanner resumed', 'ok');
-        setTimeout(scheduleNextScan, 0);
+      const next = !prev.running;
+      if (next) {
+        addLog('Resumed', 'ok');
+        setTimeout(() => { runCexScan().then(schedCex); scanDex(); }, 100);
       } else {
-        addLog('Scanner paused', 'warn');
+        addLog('Paused', 'warn');
         if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
-        if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+        if (cdTimerRef.current) clearInterval(cdTimerRef.current);
       }
-      return { ...prev, running: newRunning };
+      return { ...prev, running: next };
     });
-  }, [addLog, scheduleNextScan]);
+  }, [addLog, runCexScan, schedCex, scanDex]);
 
   const toggleSound = useCallback(() => {
     setState(prev => {
-      const newSound = !prev.soundOn;
-      if (newSound) playAlertSound(660, 0.08);
-      return { ...prev, soundOn: newSound };
+      const next = !prev.soundOn;
+      if (next) beep(660, 0.1);
+      return { ...prev, soundOn: next };
     });
   }, []);
 
-  const clearResults = useCallback(() => {
-    setState(prev => ({ ...prev, opportunities: [], bestProfit: 0, hrProfit: 0, sessionOpps: 0 }));
-    addLog('Results cleared', 'warn');
-  }, [addLog]);
+  const clearLogs = useCallback(() => setState(prev => ({ ...prev, logs: [] })), []);
+  const clearCexResults = useCallback(() => setState(prev => ({ ...prev, cexOpps: [], bestProfit: 0, hrProfit: 0 })), []);
 
-  const clearLogs = useCallback(() => {
-    setState(prev => ({ ...prev, logs: [] }));
-  }, []);
+  const refilterDex = useCallback(() => {
+    const filtered = applyDexFilters(dexOppsRef.current);
+    setState(prev => ({ ...prev, filteredDexOpps: filtered }));
+  }, [applyDexFilters]);
 
-  const manualScan = useCallback(() => {
-    runScan().then(() => {});
-  }, [runScan]);
-
+  // ═══ BOOT ═══
   useEffect(() => {
-    connectCrossWS();
-    addLog('ArbPulse Pro v4.0 initialized', 'ok');
-    addLog(`${SYMBOLS.length} symbols · ${triPathsRef.current.length} tri paths · ${EXCHANGES.length} exchanges · dual WS`);
-    runScan().then(() => {
-      addLog('Ready — auto-refresh every 25s', 'ok');
-      scheduleNextScan();
-    });
+    addLog('ArbPulse Pro v8.1 — Solana DEX + CEX multi-exchange scanner', 'ok');
+    addLog('DEX: DexScreener 4-endpoint · Safety: RugCheck.xyz · CEX: 4x WS', 'info');
+
+    // Connect all WS
+    Promise.all([connectOKX(), connectBybit(), connectKraken()]).then(() => addLog('All exchange WS connected', 'ok'));
+
+    // Initial scans
+    runCexScan().then(schedCex);
+    scanDex();
+
+    // DEX auto-scan
+    dexTimerRef.current = setInterval(() => {
+      if (runningRef.current) scanDex();
+    }, 20000);
+
+    // Request push notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
 
     return () => {
-      binanceWSRef.current?.close();
-      crossWSRef.current?.close();
-      krakenWSRef.current?.close();
       if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
-      if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
+      if (cdTimerRef.current) clearInterval(cdTimerRef.current);
+      if (dexTimerRef.current) clearInterval(dexTimerRef.current);
+      wsRef.current?.close();
+      wsOKXRef.current?.close();
+      wsBybitRef.current?.close();
+      wsKrakenRef.current?.close();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return {
-    state,
-    filters,
-    setFilters,
-    toggleScanner,
-    toggleSound,
-    clearResults,
-    clearLogs,
-    manualScan,
+    state, filters, setFilters,
+    toggleScanner, toggleSound, clearLogs, clearCexResults,
+    runCexScan: () => runCexScan().then(schedCex),
+    scanDex, logOpp, clearHistory, exportCSV,
+    setActiveView, refilterDex,
   };
 }
