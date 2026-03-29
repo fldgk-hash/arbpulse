@@ -1,4 +1,8 @@
 User-agent: *
 Allow: /
 
+# Block build artifacts
+Disallow: /src/
+Disallow: /node_modules/
+
 Sitemap: https://arbpulse.pro/sitemap.xml
