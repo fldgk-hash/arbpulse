@@ -1,86 +1,89 @@
 import { useState } from 'react';
 import { useArbScanner } from '@/hooks/useArbScanner';
+import type { DexOpp, CexOpp } from '@/hooks/useArbScanner';
 import { TopBar } from '@/components/TopBar';
 import { Sidebar } from '@/components/Sidebar';
-import { MainPanel } from '@/components/MainPanel';
+import { DexView } from '@/components/DexView';
+import { CexView } from '@/components/CexView';
+import { AnalyticsView } from '@/components/AnalyticsView';
 import { LogPanel } from '@/components/LogPanel';
+import { BottomNav } from '@/components/BottomNav';
+import { TradeCalculator } from '@/components/TradeCalculator';
 
 const Index = () => {
-  const { state, filters, setFilters, toggleScanner, toggleSound, clearResults, clearLogs, manualScan } = useArbScanner();
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const {
+    state, filters, setFilters,
+    toggleScanner, toggleSound, clearLogs, clearCexResults,
+    runCexScan, scanDex, logOpp, clearHistory, exportCSV,
+    setActiveView, refilterDex,
+  } = useArbScanner();
+
+  const [calcOpp, setCalcOpp] = useState<(DexOpp | CexOpp) | null>(null);
+
+  const view = state.activeView;
 
   return (
-    <div className="flex flex-col min-h-screen lg:h-screen relative z-[1]">
+    <div className="flex flex-col h-[100dvh] relative z-[1]">
       <TopBar state={state} onToggleScanner={toggleScanner} onToggleSound={toggleSound} />
 
       {/* Scan progress bar */}
-      <div className="h-0.5 bg-arb-border relative overflow-hidden flex-shrink-0">
+      <div className="h-0.5 bg-arb-bg3 relative overflow-hidden flex-shrink-0">
         {state.scanProgress > 0 && (
-          <div className="h-full bg-gradient-to-r from-arb-green to-arb-blue transition-all duration-300 relative" style={{ width: `${state.scanProgress}%` }}>
-            <div className="absolute right-0 -top-px -bottom-px w-5 bg-gradient-to-r from-transparent to-white/60 blur-sm" />
-          </div>
-        )}
-      </div>
-
-      {/* Mobile: quick stats bar */}
-      <div className="lg:hidden flex bg-arb-bg3 border-b border-arb-border overflow-x-auto flex-shrink-0" style={{ scrollbarWidth: 'none' }}>
-        <MobileStat label="Status" value={state.running ? 'LIVE' : 'PAUSED'} className="text-arb-green" />
-        <MobileStat label="Opps" value={state.opportunities.length.toString()} className="text-arb-green" />
-        <MobileStat label="Best" value={`$${state.bestProfit.toFixed(2)}`} className="text-arb-green" />
-        <MobileStat label="Profit/hr" value={`$${Math.round(state.hrProfit)}`} className="text-arb-amber" />
-        <MobileStat label="Scans" value={`#${state.scanCount}`} className="text-arb-head" />
-      </div>
-
-      {/* Mobile: settings toggle */}
-      <div className="lg:hidden flex-shrink-0">
-        <button
-          onClick={() => setSettingsOpen(!settingsOpen)}
-          className="w-full flex items-center justify-between px-4 py-2.5 bg-arb-bg2 border-b border-arb-border text-arb-head font-sans text-[11px] font-bold tracking-wider uppercase"
-        >
-          <span>⚙️ Scanner Settings & Filters</span>
-          <span className={`transition-transform ${settingsOpen ? 'rotate-180' : ''}`}>▾</span>
-        </button>
-        {settingsOpen && (
-          <div className="bg-arb-bg2 border-b border-arb-border max-h-[60vh] overflow-y-auto">
-            <Sidebar state={state} filters={filters} setFilters={setFilters} onManualScan={manualScan} onClearResults={clearResults} />
-          </div>
+          <div className="h-full bg-gradient-to-r from-arb-green to-arb-cyan transition-all duration-300" style={{ width: `${state.scanProgress}%` }} />
         )}
       </div>
 
       {/* Desktop: 3-column layout */}
-      <div className="hidden lg:grid lg:grid-cols-[280px_1fr_320px] flex-1 overflow-hidden">
+      <div className="hidden lg:grid lg:grid-cols-[260px_1fr_290px] flex-1 overflow-hidden">
         <aside className="border-r border-arb-border bg-arb-bg2 overflow-y-auto">
-          <Sidebar state={state} filters={filters} setFilters={setFilters} onManualScan={manualScan} onClearResults={clearResults} />
+          <Sidebar state={state} filters={filters} setFilters={setFilters} onManualScan={runCexScan} onClearResults={clearCexResults} />
         </aside>
-        <main className="overflow-y-auto flex flex-col">
-          <MainPanel state={state} filters={filters} />
+        <main className="overflow-hidden flex flex-col relative">
+          {/* DEX view always visible on desktop main */}
+          <DexView opps={state.filteredDexOpps} filters={filters} setFilters={setFilters}
+            scanning={state.dexScanning} status={state.dexStatus}
+            onScan={scanDex} onRefilter={refilterDex}
+            onLogOpp={o => logOpp(o)} onCalc={o => setCalcOpp(o)} />
         </main>
-        <section className="border-l border-arb-border bg-arb-bg2 flex flex-col">
+        <section className="border-l border-arb-border bg-arb-bg2 flex flex-col overflow-hidden">
           <LogPanel state={state} onClearLogs={clearLogs} />
         </section>
       </div>
 
-      {/* Mobile: all panels stacked */}
-      <div className="lg:hidden flex flex-col flex-1 overflow-y-auto">
-        {/* Main panel */}
-        <MainPanel state={state} filters={filters} />
-
-        {/* Log panel */}
-        <div className="border-t border-arb-border bg-arb-bg2">
+      {/* Mobile: view switching */}
+      <div className="lg:hidden flex-1 overflow-hidden flex flex-col">
+        {view === 'dex' && (
+          <DexView opps={state.filteredDexOpps} filters={filters} setFilters={setFilters}
+            scanning={state.dexScanning} status={state.dexStatus}
+            onScan={scanDex} onRefilter={refilterDex}
+            onLogOpp={o => logOpp(o)} onCalc={o => setCalcOpp(o)} />
+        )}
+        {view === 'cex' && (
+          <CexView state={state} filters={filters}
+            onLogOpp={o => logOpp(o)} onCalc={o => setCalcOpp(o)} />
+        )}
+        {view === 'analytics' && (
+          <AnalyticsView state={state} onClearHistory={clearHistory} onExportCSV={exportCSV} />
+        )}
+        {view === 'log' && (
           <LogPanel state={state} onClearLogs={clearLogs} />
-        </div>
+        )}
+        {view === 'settings' && (
+          <div className="flex-1 overflow-y-auto bg-arb-bg2">
+            <Sidebar state={state} filters={filters} setFilters={setFilters} onManualScan={runCexScan} onClearResults={clearCexResults} />
+          </div>
+        )}
       </div>
+
+      {/* Bottom Nav - Mobile */}
+      <BottomNav activeView={view} onSwitch={setActiveView} newPairCount={state.newPairCount} />
+
+      {/* Trade Calculator Modal */}
+      {calcOpp && (
+        <TradeCalculator opp={calcOpp} onClose={() => setCalcOpp(null)} onLog={logOpp} defaultTradeSize={filters.tradeSize} />
+      )}
     </div>
   );
 };
-
-function MobileStat({ label, value, className = '' }: { label: string; value: string; className?: string }) {
-  return (
-    <div className="px-3 py-2 flex flex-col gap-px border-r border-arb-border whitespace-nowrap">
-      <div className="text-[8px] text-arb-muted uppercase tracking-wider">{label}</div>
-      <div className={`text-[12px] font-semibold font-sans ${className}`}>{value}</div>
-    </div>
-  );
-}
 
 export default Index;
