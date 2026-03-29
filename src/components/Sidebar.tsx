@@ -113,9 +113,15 @@ export const Sidebar = memo(({ state, filters, setFilters, onManualScan, onClear
         <div className="bg-arb-bg3 border border-arb-border2 rounded-lg p-2.5 text-center">
           <div className="font-sans font-semibold text-[12px] text-arb-head">☕ Support ArbPulse</div>
           <div className="text-[9px] text-arb-muted mt-1 mb-2">Help keep the real-data engine running</div>
-          <div className="text-[8px] text-arb-blue cursor-pointer break-all p-1.5 bg-arb-bg2 rounded mt-1.5 hover:text-arb-amber transition-colors"
+          <div className="text-[8px] text-arb-muted uppercase tracking-wider text-left mb-0.5">BTC</div>
+          <div className="text-[8px] text-arb-blue cursor-pointer break-all p-1.5 bg-arb-bg2 rounded hover:text-arb-amber transition-colors"
             onClick={() => navigator.clipboard?.writeText('bc1q0d0ccaxuw065ezdulr68azp2fjhc0avaqf0pyz')}>
             bc1q0d0ccaxuw065ezdulr68azp2fjhc0avaqf0pyz
+          </div>
+          <div className="text-[8px] text-arb-muted uppercase tracking-wider text-left mb-0.5 mt-2">SOL</div>
+          <div className="text-[8px] text-arb-green cursor-pointer break-all p-1.5 bg-arb-bg2 rounded hover:text-arb-amber transition-colors"
+            onClick={() => navigator.clipboard?.writeText('8hyvZTaKUWEX3Zfd5xVZiXi7V4NhXQJ5ktuDtbx1svcp')}>
+            8hyvZTaKUWEX3Zfd5xVZiXi7V4NhXQJ5ktuDtbx1svcp
           </div>
         </div>
       </Section>

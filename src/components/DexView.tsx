@@ -1,6 +1,6 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import type { DexOpp, ScannerFilters, SafetyResult } from '@/hooks/useArbScanner';
-import { fmtPrice, fmtVol, fmtAge } from '@/hooks/useArbScanner';
+import { fmtPrice, fmtVol, fmtAge, LOW_LIQ_THRESHOLD } from '@/hooks/useArbScanner';
 
 interface DexViewProps {
   opps: DexOpp[];
@@ -22,6 +22,10 @@ export const DexView = memo(({ opps, filters, setFilters, scanning, status, onSc
 
   return (
     <div className="flex flex-col gap-2 p-2.5 overflow-y-auto flex-1 bg-arb-bg">
+
+      {/* DYOR Disclaimer */}
+      <DyorBanner />
+
       {/* Filter Bar */}
       <div className="flex gap-1.5 items-center flex-wrap bg-arb-bg2 border border-arb-border rounded-md p-2 px-2.5 flex-shrink-0">
         <FilterChip label="Liq $">
@@ -62,6 +66,9 @@ export const DexView = memo(({ opps, filters, setFilters, scanning, status, onSc
       <div className="flex items-center justify-between flex-shrink-0">
         <div className="font-sans font-semibold text-[13px] text-arb-head flex items-center gap-1.5">
           🚀 Solana DEX Arb <span className="text-[10px] text-arb-muted">{opps.length} opps</span>
+          {opps.filter(o => o.lowLiquidity).length > 0 && (
+            <span className="text-[9px] text-arb-amber ml-1">⚠ {opps.filter(o => o.lowLiquidity).length} low liq</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button disabled={scanning} onClick={onScan}
@@ -97,24 +104,62 @@ export const DexView = memo(({ opps, filters, setFilters, scanning, status, onSc
   );
 });
 
+/* ─── DYOR Banner ───────────────────────────────────────────────────────────── */
+function DyorBanner() {
+  const [dismissed, setDismissed] = useState(false);
+  if (dismissed) return null;
+  return (
+    <div className="flex items-start gap-2 bg-arb-amber/[0.06] border border-arb-amber/30 rounded-md px-3 py-2 flex-shrink-0 relative">
+      <span className="text-arb-amber text-[13px] mt-0.5 flex-shrink-0">⚠</span>
+      <div className="flex-1 min-w-0">
+        <span className="text-[9px] font-bold text-arb-amber uppercase tracking-wider">DO YOUR OWN RESEARCH (DYOR)</span>
+        <p className="text-[9px] text-arb-muted mt-0.5 leading-relaxed">
+          ArbPulse Pro displays real-time data for informational purposes only. Arbitrage involves significant risk including slippage, MEV bots, rug pulls and low-liquidity traps. Always verify pair addresses on-chain before executing trades. <strong className="text-arb-text">Not financial advice.</strong>
+        </p>
+      </div>
+      <button onClick={() => setDismissed(true)} className="text-arb-muted text-[10px] hover:text-arb-amber transition-colors flex-shrink-0 ml-1">✕</button>
+    </div>
+  );
+}
+
+/* ─── DexCard ───────────────────────────────────────────────────────────────── */
 function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number; onLog: (o: DexOpp) => void; onCalc: (o: DexOpp) => void }) {
   const sc = o.spreadPct > 2 ? 'text-arb-green' : o.spreadPct > 0.5 ? 'text-arb-amber' : 'text-arb-muted';
   const accentClass = o.hot ? 'bg-gradient-to-b from-arb-red to-arb-amber' : o.safety ? (o.safety.score < 300 ? 'bg-arb-green' : o.safety.score < 600 ? 'bg-arb-amber' : 'bg-arb-red') : 'bg-arb-amber';
+  const borderClass = o.hot ? 'border-arb-red/30' : o.isNew ? 'border-arb-cyan/30' : o.lowLiquidity ? 'border-arb-amber/40' : 'border-arb-border';
+  const minTvl = Math.min(o.buyTvl || o.buyLiq, o.sellTvl || o.sellLiq);
 
   return (
-    <div className={`bg-arb-bg2 border rounded-lg p-2.5 px-3 relative overflow-hidden animate-fade-in ${o.hot ? 'border-arb-red/30' : o.isNew ? 'border-arb-cyan/30' : 'border-arb-border'}`}>
+    <div className={`bg-arb-bg2 border rounded-lg p-2.5 px-3 relative overflow-hidden animate-fade-in ${borderClass}`}>
       <div className={`absolute left-0 top-0 bottom-0 w-[3px] ${accentClass}`} />
 
-      {/* Row 1: Token + Badges */}
+      {/* Low Liquidity Warning bar */}
+      {o.lowLiquidity && (
+        <div className="flex items-center gap-1.5 bg-arb-amber/[0.08] border border-arb-amber/25 rounded px-2 py-1 mb-2">
+          <span className="text-arb-amber text-[12px]">⚠</span>
+          <span className="text-[9px] text-arb-amber font-semibold">Low Liquidity Pair</span>
+          <span className="text-[9px] text-arb-muted">— TVL below ${(LOW_LIQ_THRESHOLD / 1000).toFixed(0)}K · High price impact risk</span>
+        </div>
+      )}
+
+      {/* Row 1: Token name + badges */}
       <div className="flex items-start justify-between mb-1.5">
-        <div>
-          <div className="font-sans font-bold text-[15px] text-arb-head">{o.symbol}</div>
+        <div className="flex-1 min-w-0 mr-2">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="font-sans font-bold text-[15px] text-arb-head">{o.symbol}</span>
+            <PairAddressChip addr={o.buyPairAddr} dex={o.buyDex} label="buy pair" />
+            {o.sellPairAddr && o.sellPairAddr !== o.buyPairAddr && (
+              <PairAddressChip addr={o.sellPairAddr} dex={o.sellDex} label="sell pair" />
+            )}
+          </div>
           <div className="text-[9px] text-arb-muted mt-0.5">{o.name}</div>
+          <MintAddressChip mint={o.mint} />
         </div>
         <div className="flex gap-1 flex-wrap justify-end max-w-[55%]">
           {o.isVNew && <Badge cls="bg-arb-cyan/10 border-arb-cyan/30 text-arb-cyan">🆕 NEW 6H</Badge>}
           {!o.isVNew && o.isNew && <Badge cls="bg-arb-cyan/10 border-arb-cyan/30 text-arb-cyan">NEW 24H</Badge>}
           {o.hot && <Badge cls="bg-gradient-to-br from-[#ff6b35] to-arb-red border-none text-white animate-hot-glow">🔥 HOT</Badge>}
+          {o.lowLiquidity && <Badge cls="bg-arb-amber/10 border-arb-amber/30 text-arb-amber">⚠ LOW LIQ</Badge>}
           <SafetyBadge safety={o.safety} />
         </div>
       </div>
@@ -127,12 +172,29 @@ function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number;
         <span className="text-[9px] text-arb-muted ml-auto whitespace-nowrap">${fmtPrice(o.buyPrice)} → ${fmtPrice(o.sellPrice)}</span>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-4 gap-1">
+      {/* Stats grid — 5 cells including TVL */}
+      <div className="grid grid-cols-5 gap-1 mb-1.5">
         <StatBox label="Spread" value={`${o.spreadPct.toFixed(2)}%`} cls={sc} />
         <StatBox label="Net Profit" value={`$${o.net.toFixed(2)}`} cls="text-arb-green" />
         <StatBox label="Min Liq" value={fmtVol(o.minLiq)} cls="text-arb-head" />
+        <StatBox
+          label="TVL"
+          value={fmtVol(minTvl)}
+          cls={minTvl < LOW_LIQ_THRESHOLD ? 'text-arb-amber' : 'text-arb-head'}
+          icon={minTvl < LOW_LIQ_THRESHOLD ? '⚠' : undefined}
+        />
         <StatBox label="Age" value={fmtAge(o.createdAt)} cls={o.isNew ? 'text-arb-amber' : 'text-arb-muted'} />
+      </div>
+
+      {/* Pair addresses row — verifiable links */}
+      <div className="flex items-center gap-2 flex-wrap mb-1">
+        <PairAddressRow label="Buy" addr={o.buyPairAddr} dex={o.buyDex} />
+        {o.sellPairAddr && o.sellPairAddr !== o.buyPairAddr && (
+          <>
+            <span className="text-arb-border2 text-[9px]">|</span>
+            <PairAddressRow label="Sell" addr={o.sellPairAddr} dex={o.sellDex} />
+          </>
+        )}
       </div>
 
       {/* Safety bar */}
@@ -155,7 +217,78 @@ function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number;
         <button onClick={() => onCalc(o)} className="px-2.5 py-1 bg-arb-cyan/[0.07] border border-arb-cyan/20 text-arb-cyan font-mono text-[9px] cursor-pointer rounded transition-all hover:bg-arb-cyan/15">
           🧮 CALC
         </button>
+        <a
+          href={`https://dexscreener.com/solana/${o.buyPairAddr || o.mint}`}
+          target="_blank" rel="noopener noreferrer"
+          className="px-2.5 py-1 bg-arb-purple/[0.07] border border-arb-purple/20 text-arb-purple font-mono text-[9px] rounded transition-all hover:bg-arb-purple/15 no-underline inline-flex items-center"
+        >
+          📊 DS
+        </a>
+        <a
+          href={`https://solscan.io/token/${o.mint}`}
+          target="_blank" rel="noopener noreferrer"
+          className="px-2.5 py-1 bg-arb-blue/[0.07] border border-arb-border2 text-arb-muted font-mono text-[9px] rounded transition-all hover:bg-arb-blue/10 no-underline inline-flex items-center"
+        >
+          🔍 Scan
+        </a>
       </div>
+    </div>
+  );
+}
+
+/* ─── Helpers ───────────────────────────────────────────────────────────────── */
+function PairAddressChip({ addr, dex, label }: { addr: string; dex: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!addr) return null;
+  const short = addr.slice(0, 4) + '…' + addr.slice(-4);
+  const copy = () => {
+    navigator.clipboard?.writeText(addr).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <button onClick={copy} title={`${label}: ${addr}`}
+      className="text-[8px] font-mono text-arb-blue border border-arb-border2 bg-arb-bg3 px-1.5 py-0.5 rounded cursor-pointer hover:border-arb-blue/40 hover:text-arb-cyan transition-colors">
+      {copied ? '✓ copied' : short}
+    </button>
+  );
+}
+
+function MintAddressChip({ mint }: { mint: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!mint) return null;
+  const short = 'mint: ' + mint.slice(0, 6) + '…' + mint.slice(-4);
+  const copy = () => {
+    navigator.clipboard?.writeText(mint).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <button onClick={copy} title={`Token mint: ${mint}`}
+      className="text-[8px] font-mono text-arb-muted hover:text-arb-blue transition-colors mt-0.5 text-left">
+      {copied ? '✓ copied' : short}
+    </button>
+  );
+}
+
+function PairAddressRow({ label, addr, dex }: { label: string; addr: string; dex: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!addr) return <span className="text-[8px] text-arb-muted">{label}: —</span>;
+  const short = addr.slice(0, 6) + '…' + addr.slice(-4);
+  const copy = () => {
+    navigator.clipboard?.writeText(addr).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+  return (
+    <div className="flex items-center gap-1">
+      <span className="text-[8px] text-arb-muted">{label}:</span>
+      <button onClick={copy} title={`${dex} pair: ${addr}`}
+        className="text-[8px] font-mono text-arb-blue hover:text-arb-cyan transition-colors cursor-pointer">
+        {copied ? '✓' : short}
+      </button>
+      <a href={`https://dexscreener.com/solana/${addr}`} target="_blank" rel="noopener noreferrer"
+        className="text-[8px] text-arb-muted hover:text-arb-amber transition-colors" title="View on DexScreener">↗</a>
     </div>
   );
 }
@@ -177,11 +310,14 @@ function Badge({ cls, children }: { cls: string; children: React.ReactNode }) {
   return <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold inline-flex items-center gap-0.5 whitespace-nowrap border ${cls}`}>{children}</span>;
 }
 
-function StatBox({ label, value, cls }: { label: string; value: string; cls: string }) {
+function StatBox({ label, value, cls, icon }: { label: string; value: string; cls: string; icon?: string }) {
   return (
     <div className="bg-arb-bg3 rounded p-1.5 px-2">
       <div className="text-[8px] text-arb-muted uppercase tracking-wider">{label}</div>
-      <div className={`text-[12px] font-semibold mt-0.5 tabular-nums ${cls}`}>{value}</div>
+      <div className={`text-[11px] font-semibold mt-0.5 tabular-nums flex items-center gap-0.5 ${cls}`}>
+        {icon && <span className="text-[10px]">{icon}</span>}
+        {value}
+      </div>
     </div>
   );
 }

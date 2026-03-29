@@ -74,10 +74,16 @@ export interface DexOpp {
   eB: number; eS: number;
   rawSpread: number; spreadPct: number; net: number;
   buyLiq: number; sellLiq: number; minLiq: number;
+  buyTvl: number; sellTvl: number;
+  buyPairAddr: string; sellPairAddr: string;
   vol24h: number; createdAt: number | null;
   isNew: boolean; isVNew: boolean; hot: boolean;
+  lowLiquidity: boolean;
   safety: SafetyResult | null;
 }
+
+// TVL threshold below which we flag a pair as low-liquidity risk
+export const LOW_LIQ_THRESHOLD = 10000;
 
 export interface CexOpp {
   id: string; type: 'tri' | 'cross'; label: string;
@@ -466,13 +472,14 @@ export function useArbScanner() {
       const dex = pair.dexId || 'unknown';
       if (!byToken[addr]) byToken[addr] = { symbol: pair.baseToken.symbol || '?', name: pair.baseToken.name || '', mint: addr, pairs: [] };
       const existing = byToken[addr].pairs.find((p: any) => p.dex === dex);
-      if (existing) { if (liq > existing.liq) Object.assign(existing, { price, liq, vol }); }
+      if (existing) { if (liq > existing.liq) Object.assign(existing, { price, liq, vol, tvl: liq, pairAddr: pair.pairAddress || existing.pairAddr || '' }); }
       else {
         byToken[addr].pairs.push({
           dex, price, liq, vol,
+          tvl: liq,
           bid: price * (1 - (DEX_FEES[dex] || 0.003)),
           ask: price * (1 + (DEX_FEES[dex] || 0.003)),
-          pairAddr: pair.pairAddress,
+          pairAddr: pair.pairAddress || '',
           createdAt: pair.pairCreatedAt || null,
         });
       }
@@ -493,16 +500,21 @@ export function useArbScanner() {
           const qty = f.tradeSize / eB, net = (eS - eB) * qty, sp = ((eS - eB) / eB) * 100;
           if (sp < f.dexMinSpread || net < f.minProfit) continue;
           const age = buy.createdAt && sell.createdAt ? Math.min(buy.createdAt, sell.createdAt) : (buy.createdAt || sell.createdAt || null);
+          const minLiqVal = Math.min(buy.liq, sell.liq);
           results.push({
             id: `dex-${token.mint}-${buy.dex}-${sell.dex}`,
             symbol: token.symbol, name: token.name, mint: token.mint,
             buyDex: buy.dex, sellDex: sell.dex,
             buyPrice: buy.price, sellPrice: sell.price,
             rawSpread, eB, eS, spreadPct: sp, net,
-            buyLiq: buy.liq, sellLiq: sell.liq, minLiq: Math.min(buy.liq, sell.liq),
+            buyLiq: buy.liq, sellLiq: sell.liq, minLiq: minLiqVal,
+            buyTvl: buy.tvl || buy.liq, sellTvl: sell.tvl || sell.liq,
+            buyPairAddr: buy.pairAddr || '', sellPairAddr: sell.pairAddr || '',
             vol24h: Math.max(buy.vol, sell.vol),
             createdAt: age, isNew: isNew(age), isVNew: isVNew(age),
-            hot: sp > 1.5, safety: null,
+            hot: sp > 1.5,
+            lowLiquidity: minLiqVal < LOW_LIQ_THRESHOLD,
+            safety: null,
           });
         }
       }
