@@ -21,12 +21,22 @@ export const TradeCalculator = memo(({ opp, onClose, onLog, defaultTradeSize }: 
   const sellAt = isDex ? (opp as DexOpp).eS || (opp as DexOpp).sellPrice : (opp as CexOpp).sellAt;
   const label = isDex ? `${(opp as DexOpp).symbol} — ${(opp as DexOpp).buyDex} → ${(opp as DexOpp).sellDex}` : `${(opp as CexOpp).label} — ${(opp as CexOpp).buyEx} → ${(opp as CexOpp).sellEx}`;
 
+  // Dynamic fees per exchange type
+  const isDexOpp = isDex;
+  const buyFee = isDexOpp
+    ? ((opp as DexOpp).buyDex?.includes('pancake') || (opp as DexOpp).buyDex?.includes('v3') ? 0.0005 : 0.003)
+    : ((opp as CexOpp).buyEx === 'Kraken' ? 0.002 : 0.001);
+  const sellFee = isDexOpp
+    ? ((opp as DexOpp).sellDex?.includes('pancake') || (opp as DexOpp).sellDex?.includes('v3') ? 0.0005 : 0.003)
+    : ((opp as CexOpp).sellEx === 'Kraken' ? 0.002 : 0.001);
+  const feeRate = buyFee + sellFee;
+
   const qty = size / buyAt;
   const gross = (sellAt - buyAt) * qty;
-  const fees = size * 0.003;
+  const fees = size * feeRate;
   const net = gross - fees;
   const roi = (net / size) * 100;
-  const bePct = ((fees / qty + buyAt - buyAt) / buyAt) * 100;
+  const bePct = (feeRate / (sellAt / buyAt - 1)) * 100;
 
   return (
     <div className="fixed inset-0 bg-black/70 z-[200] flex items-center justify-center p-4" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
@@ -42,7 +52,7 @@ export const TradeCalculator = memo(({ opp, onClose, onLog, defaultTradeSize }: 
             <CalcItem label="Buy Price" value={`$${fmtPrice(buyAt)}`} />
             <CalcItem label="Sell Price" value={`$${fmtPrice(sellAt)}`} />
             <CalcItem label="Spread" value={`${opp.spreadPct.toFixed(3)}%`} cls="text-arb-green" />
-            <CalcItem label="Fees" value={`$${fees.toFixed(2)}`} cls="text-arb-amber" />
+            <CalcItem label={`Fees (${(feeRate*100).toFixed(2)}%)`} value={`$${fees.toFixed(2)}`} cls="text-arb-amber" />
           </div>
 
           <div>

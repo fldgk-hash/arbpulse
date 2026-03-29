@@ -14,9 +14,13 @@ export const TopBar = memo(({ state, onToggleScanner, onToggleSound }: TopBarPro
     return () => clearInterval(t);
   }, []);
 
-  const bestSpread = state.cexOpps.length > 0
-    ? Math.max(...state.cexOpps.map(o => o.spreadPct)).toFixed(2) + '%'
-    : (state.filteredDexOpps.length > 0 ? Math.max(...state.filteredDexOpps.map(o => o.spreadPct)).toFixed(2) + '%' : '—');
+  const allSpreads = [
+    ...state.cexOpps.map(o => o.spreadPct),
+    ...state.filteredDexOpps.map(o => o.spreadPct),
+    ...state.filteredBscOpps.map(o => o.spreadPct),
+  ];
+  const bestSpread = allSpreads.length > 0 ? Math.max(...allSpreads).toFixed(2) + '%' : '—';
+  const totalOpps = state.cexOpps.length + state.filteredDexOpps.length + state.filteredBscOpps.length;
 
   return (
     <header className="flex items-center justify-between px-3 bg-arb-bg2 flex-shrink-0 border-b border-arb-border2 z-20" style={{ height: '52px' }}>
@@ -33,8 +37,9 @@ export const TopBar = memo(({ state, onToggleScanner, onToggleSound }: TopBarPro
           <div className={`w-1.5 h-1.5 rounded-full ${state.running ? 'bg-arb-green animate-pulse-dot' : 'bg-arb-amber'}`} />
           <span className={state.running ? 'text-arb-green' : 'text-arb-amber'}>{state.running ? 'LIVE' : 'PAUSED'}</span>
         </StatChip>
-        <StatChip>Opps&nbsp;<b className="text-arb-head font-medium">{state.filteredDexOpps.length + state.cexOpps.length}</b></StatChip>
+        <StatChip>Opps&nbsp;<b className="text-arb-head font-medium">{totalOpps}</b></StatChip>
         <StatChip>Best&nbsp;<b className="text-arb-head font-medium">{bestSpread}</b></StatChip>
+        <StatChip>Scans&nbsp;<b className="text-arb-head font-medium">#{state.scanCount}</b></StatChip>
       </div>
 
       {/* Right */}

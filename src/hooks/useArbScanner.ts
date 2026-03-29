@@ -258,6 +258,26 @@ export function useArbScanner() {
   const bscTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => { filtersRef.current = filters; }, [filters]);
+
+  // Restart CEX timer when cexInterval changes (after boot)
+  useEffect(() => {
+    if (!scanTimerRef.current) return;
+    if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
+    if (cdTimerRef.current) clearInterval(cdTimerRef.current);
+    // Reschedule with new interval
+    if (filtersRef.current.autoRefresh && runningRef.current) {
+      const iv = (filters.cexInterval || 25) * 1000;
+      const start = Date.now();
+      cdTimerRef.current = setInterval(() => {
+        const el = Date.now() - start;
+        const pct = Math.min(100, (el / iv) * 100);
+        const rem = Math.max(0, Math.ceil((iv - el) / 1000));
+        setState(prev => ({ ...prev, countdownPct: pct, countdownSec: rem }));
+        if (pct >= 100 && cdTimerRef.current) clearInterval(cdTimerRef.current);
+      }, 500);
+      scanTimerRef.current = setTimeout(() => runCexScan().then(schedCex), iv);
+    }
+  }, [filters.cexInterval]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { runningRef.current = state.running; soundOnRef.current = state.soundOn; }, [state.running, state.soundOn]);
 
   const addLog = useCallback((msg: string, type: LogEntry['type'] = 'info') => {
@@ -392,21 +412,34 @@ export function useArbScanner() {
   const connectKraken = useCallback(() => {
     return new Promise<boolean>(resolve => {
       if (wsKrakenRef.current?.readyState === WebSocket.OPEN) { resolve(true); return; }
-      const w = new WebSocket('wss://ws.kraken.com');
+      const w = new WebSocket('wss://ws.kraken.com/v2');  // Kraken WS v2
       wsKrakenRef.current = w;
       let done = false;
       w.onopen = () => {
-        w.send(JSON.stringify({ event: 'subscribe', pair: KRAKEN_PAIRS, subscription: { name: 'ticker' } }));
+        // Kraken WS v2 subscribe format
+        const v2Symbols = Object.values(KRAKEN_MAP).filter((v,i,a) => a.indexOf(v) === i).map(sym => {
+          const revEntry = Object.entries(KRAKEN_MAP).find(([k]) => k !== 'XBT/USD' ? k : 'BTC/USD');
+          return sym;
+        });
+        // Map our KRAKEN_PAIRS (v1 format) to v2 format (BTC/USD not XBT/USD)
+        const v2Pairs = KRAKEN_PAIRS.map(p => p === 'XBT/USD' ? 'BTC/USD' : p);
+        w.send(JSON.stringify({ method: 'subscribe', params: { channel: 'ticker', symbol: v2Pairs } }));
         setExStatus('kraken', true, 'WS Live'); addLog('Kraken WS connected', 'ok');
         if (!done) { done = true; resolve(true); }
       };
       w.onmessage = evt => {
         try {
           const d = JSON.parse(evt.data);
-          if (!Array.isArray(d) || d[2] !== 'ticker') return;
-          const pair = d[3], sym = KRAKEN_MAP[pair]; if (!sym) return;
-          const t = d[1];
-          krakenPricesRef.current[sym] = { bid: parseFloat(t.b?.[0]) || 0, ask: parseFloat(t.a?.[0]) || 0, price: parseFloat(t.c?.[0]) || 0 };
+          // Kraken WS v2 format: { channel:'ticker', data:[{symbol, bid, ask, last}] }
+          if (d.channel === 'ticker' && Array.isArray(d.data)) {
+            d.data.forEach((t: any) => {
+              const pairKey = t.symbol === 'BTC/USD' ? 'XBT/USD' : t.symbol;
+              const sym = KRAKEN_MAP[pairKey]; if (!sym) return;
+              krakenPricesRef.current[sym] = {
+                bid: t.bid || 0, ask: t.ask || 0, price: t.last || 0
+              };
+            });
+          }
         } catch {}
       };
       w.onerror = () => { setExStatus('kraken', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
@@ -416,16 +449,13 @@ export function useArbScanner() {
   }, [addLog, setExStatus]);
 
   const getExPrices = useCallback((id: string) => {
+    // ONLY return live WS data — never simulate/fake prices
     const src: Record<string, PriceData> = { okx: okxPricesRef.current, bybit: bybitPricesRef.current, kraken: krakenPricesRef.current }[id] || {};
     const out: Record<string, PriceData> = {};
     SYMBOLS.forEach(sym => {
       const live = src[sym];
-      if (live && (live.bid || 0) > 0 && (live.ask || 0) > 0) { out[sym] = live; return; }
-      const p = pricesRef.current[sym]?.price; if (!p) return;
-      const bias: Record<string, number> = { okx: 0.0003, bybit: -0.0002, kraken: 0.0004 };
-      const n = (Math.random() - 0.5) * 0.002 + (bias[id] || 0);
-      const mp = p * (1 + n);
-      out[sym] = { bid: mp * 0.9997, ask: mp * 1.0003, price: mp };
+      if (live && (live.bid || 0) > 0 && (live.ask || 0) > 0) { out[sym] = live; }
+      // No fallback — if no live data, symbol is simply excluded from cross-arb
     });
     return out;
   }, []);
@@ -661,7 +691,7 @@ export function useArbScanner() {
       const p1 = B[ab]?.ask, p2 = B[bc]?.ask, p3 = B[ca]?.bid;
       if (!p1 || !p2 || !p3 || p1 <= 0 || p2 <= 0 || p3 <= 0) return;
       const bQ = (f.tradeSize / p1) * (1 - fee), qQ = (bQ / p2) * (1 - fee), fin = qQ * p3 * (1 - fee);
-      const gr = fin - f.tradeSize, sp = (gr / f.tradeSize) * 100, net = gr - f.tradeSize * fee * 0.5;
+      const gr = fin - f.tradeSize, sp = (gr / f.tradeSize) * 100, net = gr - f.tradeSize * fee * 3; // 3 legs × fee
       if (sp > f.minSpread && net > f.minProfit) {
         const base = ab.replace('USDT', ''), q = bc.replace(base, '').replace('USDT', '');
         opps.push({ id: `tri-${ab}-${bc}`, type: 'tri', label: `${base}→${q}→USDT`, buyEx: 'Binance', sellEx: 'Binance', buyAt: p1, sellAt: p3, spreadPct: sp, net });
@@ -679,7 +709,7 @@ export function useArbScanner() {
       { id: 'kraken', name: 'Kraken', prices: kraken, fee: 0.002 },
     ];
     const opps: CexOpp[] = [];
-    SYMBOLS.slice(0, 30).forEach(sym => {
+    SYMBOLS.forEach(sym => { // All 40 symbols
       for (let i = 0; i < aEx.length; i++) for (let j = 0; j < aEx.length; j++) {
         if (i === j) continue;
         const bE = aEx[i], sE = aEx[j];
@@ -697,7 +727,7 @@ export function useArbScanner() {
   const runCexScan = useCallback(async () => {
     if (!runningRef.current) return;
     setState(prev => ({ ...prev, scanCount: prev.scanCount + 1, scanProgress: 50 }));
-    addLog(`— CEX Scan #${(stateRef.current?.scanCount || 0) + 1}`, 'info');
+    addLog(`— CEX Scan`, 'info'); // scanCount updated via setState
 
     let ok = false;
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
@@ -739,6 +769,16 @@ export function useArbScanner() {
   useEffect(() => { stateRef.current = state; }, [state]);
 
   // ═══ SCHEDULING ═══
+  // Restart DEX timers when dexInterval changes
+  useEffect(() => {
+    if (!dexTimerRef.current && !bscTimerRef.current) return; // Not yet booted
+    if (dexTimerRef.current) clearInterval(dexTimerRef.current);
+    if (bscTimerRef.current) clearInterval(bscTimerRef.current);
+    const iv = (filtersRef.current.dexInterval || 20) * 1000;
+    dexTimerRef.current = setInterval(() => { if (runningRef.current) scanDex(); }, iv);
+    bscTimerRef.current = setInterval(() => { if (runningRef.current) scanBsc(); }, Math.max(30000, iv + 10000));
+  }, [filters.dexInterval]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const schedCex = useCallback(() => {
     if (!filtersRef.current.autoRefresh || !runningRef.current) return;
     if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
@@ -843,15 +883,15 @@ export function useArbScanner() {
     // Stagger BSC scan by 3s to avoid API rate limits
     setTimeout(() => scanBsc(), 3000);
 
-    // Solana DEX auto-scan
+    // Solana DEX auto-scan — respects dexInterval filter (default 20s)
     dexTimerRef.current = setInterval(() => {
       if (runningRef.current) scanDex();
-    }, 20000);
+    }, (filtersRef.current.dexInterval || 20) * 1000);
 
-    // BSC DEX auto-scan (offset by 10s to stagger)
+    // BSC DEX auto-scan — staggered by 10s relative to Solana timer
     bscTimerRef.current = setInterval(() => {
       if (runningRef.current) scanBsc();
-    }, 30000);
+    }, Math.max(30, (filtersRef.current.dexInterval || 20) + 10) * 1000);
 
     // Request push notification permission
     if ('Notification' in window && Notification.permission === 'default') {

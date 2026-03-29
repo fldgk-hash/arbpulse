@@ -18,7 +18,7 @@ export const CexView = memo(({ state, filters, onLogOpp, onCalc }: CexViewProps)
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 flex-shrink-0">
         <KPI label="Best Spread" value={bestSpread} cls="text-arb-green" />
-        <KPI label="Est/hr" value={`$${Math.round(state.hrProfit)}`} cls="text-arb-amber" />
+        <KPI label="Est/hr (max)" value={`$${Math.round(state.hrProfit)}`} cls="text-arb-amber" />
         <KPI label="Scanned" value={state.totalScanned.toString()} cls="text-arb-blue" />
         <KPI label="CEX Opps" value={opps.length.toString()} cls="text-arb-head" />
       </div>

@@ -33,18 +33,57 @@ const Index = () => {
         )}
       </div>
 
-      {/* Desktop: 3-column layout */}
+      {/* Desktop: 3-column layout with main-area tab switcher */}
       <div className="hidden lg:grid lg:grid-cols-[260px_1fr_290px] flex-1 overflow-hidden">
         <aside className="border-r border-arb-border bg-arb-bg2 overflow-y-auto">
           <Sidebar state={state} filters={filters} setFilters={setFilters} onManualScan={runCexScan} onClearResults={clearCexResults} />
         </aside>
         <main className="overflow-hidden flex flex-col relative">
-          {/* DEX view always visible on desktop main */}
-          <DexView
-            opps={state.filteredDexOpps} scanning={state.dexScanning} status={state.dexStatus} onScan={scanDex}
-            bscOpps={state.filteredBscOpps} bscScanning={state.bscScanning} bscStatus={state.bscStatus} onBscScan={scanBsc}
-            filters={filters} setFilters={setFilters} onRefilter={refilterDex}
-            onLogOpp={o => logOpp(o)} onCalc={o => setCalcOpp(o)} />
+          {/* Main area tab bar — DEX / CEX / Analytics */}
+          <div className="flex gap-0 border-b border-arb-border flex-shrink-0 bg-arb-bg2">
+            {[
+              { id: 'dex',       label: '🚀 DEX',       count: state.filteredDexOpps.length + state.filteredBscOpps.length },
+              { id: 'cex',       label: '📊 CEX',       count: state.cexOpps.length },
+              { id: 'analytics', label: '💰 Analytics', count: state.history.length },
+            ].map(tab => (
+              <button key={tab.id} onClick={() => setActiveView(tab.id)}
+                className={`px-4 py-2.5 text-[10px] font-semibold tracking-wider uppercase border-none cursor-pointer transition-all relative font-sans flex items-center gap-1.5 ${
+                  view === tab.id
+                    ? 'text-arb-green bg-arb-bg after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-arb-green'
+                    : 'text-arb-muted bg-transparent hover:text-arb-text'
+                }`}>
+                {tab.label}
+                {tab.count > 0 && (
+                  <span className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold ${view === tab.id ? 'bg-arb-green/20 text-arb-green' : 'bg-arb-bg3 text-arb-muted'}`}>
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+          {/* Main content */}
+          {view === 'dex' && (
+            <DexView
+              opps={state.filteredDexOpps} scanning={state.dexScanning} status={state.dexStatus} onScan={scanDex}
+              bscOpps={state.filteredBscOpps} bscScanning={state.bscScanning} bscStatus={state.bscStatus} onBscScan={scanBsc}
+              filters={filters} setFilters={setFilters} onRefilter={refilterDex}
+              onLogOpp={o => logOpp(o)} onCalc={o => setCalcOpp(o)} />
+          )}
+          {view === 'cex' && (
+            <CexView state={state} filters={filters}
+              onLogOpp={o => logOpp(o)} onCalc={o => setCalcOpp(o)} />
+          )}
+          {view === 'analytics' && (
+            <AnalyticsView state={state} onClearHistory={clearHistory} onExportCSV={exportCSV} />
+          )}
+          {/* Default to dex if no recognized view */}
+          {!['dex','cex','analytics'].includes(view) && (
+            <DexView
+              opps={state.filteredDexOpps} scanning={state.dexScanning} status={state.dexStatus} onScan={scanDex}
+              bscOpps={state.filteredBscOpps} bscScanning={state.bscScanning} bscStatus={state.bscStatus} onBscScan={scanBsc}
+              filters={filters} setFilters={setFilters} onRefilter={refilterDex}
+              onLogOpp={o => logOpp(o)} onCalc={o => setCalcOpp(o)} />
+          )}
         </main>
         <section className="border-l border-arb-border bg-arb-bg2 flex flex-col overflow-hidden">
           <LogPanel state={state} onClearLogs={clearLogs} />

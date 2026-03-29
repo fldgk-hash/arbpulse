@@ -71,20 +71,18 @@ export const AnalyticsView = memo(({ state, onClearHistory, onExportCSV }: Analy
 });
 
 function PriceCompTable({ prices }: { prices: Record<string, any> }) {
-  // Simplified price comparison — shows Binance prices only since we have those in state
-  // In production this would compare all 4 exchange prices
   return (
     <div className="bg-arb-bg2 border border-arb-border rounded-lg overflow-hidden">
       <div className="flex items-center justify-between p-2.5 px-3 border-b border-arb-border flex-shrink-0">
-        <span className="font-sans font-semibold text-[12px] text-arb-head">Live Prices</span>
-        <span className="text-[9px] text-arb-muted">Updated {new Date().toLocaleTimeString()}</span>
+        <span className="font-sans font-semibold text-[12px] text-arb-head">Live Price Snapshot</span>
+        <span className="text-[9px] text-arb-muted">Binance live · {new Date().toLocaleTimeString()}</span>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse min-w-[300px] text-[11px]">
+        <table className="w-full border-collapse min-w-[360px] text-[11px]">
           <thead>
             <tr>
-              {['PAIR', 'PRICE', '24H %'].map(h => (
-                <th key={h} className="text-[8px] tracking-[2px] uppercase text-arb-muted px-3 py-2 border-b border-arb-border text-left font-semibold bg-arb-bg3">{h}</th>
+              {['PAIR','PRICE','BID','ASK','24H %'].map(h => (
+                <th key={h} className="text-[8px] tracking-[2px] uppercase text-arb-muted px-2.5 py-2 border-b border-arb-border text-left font-semibold bg-arb-bg3">{h}</th>
               ))}
             </tr>
           </thead>
@@ -93,11 +91,16 @@ function PriceCompTable({ prices }: { prices: Record<string, any> }) {
               const p = prices[sym];
               if (!p?.price) return null;
               const chg = p.chg24 ?? 0;
+              const bid = p.bid || p.price * 0.9995;
+              const ask = p.ask || p.price * 1.0005;
+              const spreadBps = bid > 0 ? ((ask - bid) / bid * 10000).toFixed(1) : '—';
               return (
                 <tr key={sym} className="hover:bg-arb-blue/[0.03]">
-                  <td className="px-3 py-1.5 border-b border-arb-border/30 text-arb-head font-medium">{sym}</td>
-                  <td className="px-3 py-1.5 border-b border-arb-border/30 tabular-nums">${fmtPrice(p.price)}</td>
-                  <td className={`px-3 py-1.5 border-b border-arb-border/30 font-semibold ${chg >= 0 ? 'text-arb-green' : 'text-arb-red'}`}>
+                  <td className="px-2.5 py-1.5 border-b border-arb-border/30 font-sans font-semibold text-arb-head">{sym}/USDT</td>
+                  <td className="px-2.5 py-1.5 border-b border-arb-border/30 tabular-nums font-mono">${fmtPrice(p.price)}</td>
+                  <td className="px-2.5 py-1.5 border-b border-arb-border/30 tabular-nums font-mono text-arb-red text-[10px]">${fmtPrice(bid)}</td>
+                  <td className="px-2.5 py-1.5 border-b border-arb-border/30 tabular-nums font-mono text-arb-green text-[10px]">${fmtPrice(ask)}</td>
+                  <td className={`px-2.5 py-1.5 border-b border-arb-border/30 font-semibold font-sans ${chg >= 0 ? 'text-arb-green' : 'text-arb-red'}`}>
                     {chg >= 0 ? '+' : ''}{chg.toFixed(2)}%
                   </td>
                 </tr>

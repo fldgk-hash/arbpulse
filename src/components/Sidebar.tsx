@@ -1,4 +1,4 @@
-import { memo } from 'react';
+import React, { memo } from 'react';
 import type { ScannerState, ScannerFilters } from '@/hooks/useArbScanner';
 import { EXCHANGES } from '@/hooks/useArbScanner';
 
@@ -110,24 +110,67 @@ export const Sidebar = memo(({ state, filters, setFilters, onManualScan, onClear
 
       {/* Donate */}
       <Section title="">
-        <div className="bg-arb-bg3 border border-arb-border2 rounded-lg p-2.5 text-center">
-          <div className="font-sans font-semibold text-[12px] text-arb-head">☕ Support ArbPulse</div>
-          <div className="text-[9px] text-arb-muted mt-1 mb-2">Help keep the real-data engine running</div>
-          <div className="text-[8px] text-arb-muted uppercase tracking-wider text-left mb-0.5">BTC</div>
-          <div className="text-[8px] text-arb-blue cursor-pointer break-all p-1.5 bg-arb-bg2 rounded hover:text-arb-amber transition-colors"
-            onClick={() => navigator.clipboard?.writeText('bc1q0d0ccaxuw065ezdulr68azp2fjhc0avaqf0pyz')}>
-            bc1q0d0ccaxuw065ezdulr68azp2fjhc0avaqf0pyz
-          </div>
-          <div className="text-[8px] text-arb-muted uppercase tracking-wider text-left mb-0.5 mt-2">SOL</div>
-          <div className="text-[8px] text-arb-green cursor-pointer break-all p-1.5 bg-arb-bg2 rounded hover:text-arb-amber transition-colors"
-            onClick={() => navigator.clipboard?.writeText('8hyvZTaKUWEX3Zfd5xVZiXi7V4NhXQJ5ktuDtbx1svcp')}>
-            8hyvZTaKUWEX3Zfd5xVZiXi7V4NhXQJ5ktuDtbx1svcp
+        <div className="rounded-lg overflow-hidden" style={{ background: 'linear-gradient(135deg,rgba(255,185,48,.04),rgba(0,245,147,.04))', border: '1px solid rgba(255,185,48,.2)', position: 'relative' }}>
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '2px', background: 'linear-gradient(90deg,hsl(var(--arb-amber)),hsl(var(--arb-green)))' }} />
+          <div className="p-2.5">
+            <div className="font-sans font-bold text-[11px] text-arb-amber uppercase tracking-wider mb-1">☕ Support Development</div>
+            <div className="text-[9px] text-arb-muted mb-2.5 leading-relaxed">If ArbPulse found you a profitable opportunity, a small tip keeps the engine running!</div>
+
+            {/* BTC QR */}
+            <div className="text-[8px] text-arb-muted uppercase tracking-wider mb-1 flex items-center gap-1">
+              <span style={{ color: '#f7931a' }}>₿</span> BTC
+            </div>
+            <div className="bg-white rounded-md mb-1.5 overflow-hidden" style={{ padding: '4px' }}>
+              <img
+                src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=bitcoin:bc1q0d0ccaxuw065ezdulr68azp2fjhc0avaqf0pyz&margin=2"
+                alt="BTC donation QR"
+                style={{ width: '100%', display: 'block', borderRadius: '4px' }}
+                loading="lazy"
+              />
+            </div>
+            <CopyAddr
+              addr="bc1q0d0ccaxuw065ezdulr68azp2fjhc0avaqf0pyz"
+              color="text-arb-amber"
+            />
+
+            {/* SOL QR */}
+            <div className="text-[8px] text-arb-muted uppercase tracking-wider mt-2.5 mb-1 flex items-center gap-1">
+              <span className="text-arb-green">◎</span> SOL
+            </div>
+            <div className="bg-white rounded-md mb-1.5 overflow-hidden" style={{ padding: '4px' }}>
+              <img
+                src="https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=solana:8hyvZTaKUWEX3Zfd5xVZiXi7V4NhXQJ5ktuDtbx1svcp&margin=2"
+                alt="SOL donation QR"
+                style={{ width: '100%', display: 'block', borderRadius: '4px' }}
+                loading="lazy"
+              />
+            </div>
+            <CopyAddr
+              addr="8hyvZTaKUWEX3Zfd5xVZiXi7V4NhXQJ5ktuDtbx1svcp"
+              color="text-arb-green"
+            />
+
+            <div className="text-center text-[8px] text-arb-muted mt-2 italic">⚡ Every satoshi/lamport helps · Thank you!</div>
           </div>
         </div>
       </Section>
     </div>
   );
 });
+
+function CopyAddr({ addr, color }: { addr: string; color: string }) {
+  const [copied, setCopied] = React.useState(false);
+  const copy = () => {
+    navigator.clipboard?.writeText(addr).catch(() => {});
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return (
+    <button onClick={copy} className={`w-full text-left text-[8px] font-mono p-1.5 rounded cursor-pointer transition-all break-all bg-arb-bg2 border border-arb-border hover:border-arb-amber ${color}`}>
+      {copied ? '✓ Copied!' : addr}
+    </button>
+  );
+}
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

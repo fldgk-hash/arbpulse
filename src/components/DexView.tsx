@@ -148,7 +148,7 @@ function ChainTabs({ active, onSwitch, solanaCount, bscCount }: {
         count={bscCount}
         color="text-arb-amber"
         activeBg="bg-arb-amber/10 border-arb-amber/30"
-        badge="$1.08B Vol"
+        // badge removed — was hardcoded static value, misleading
       />
     </div>
   );
@@ -168,9 +168,7 @@ function ChainTab({ active, onClick, icon, label, count, color, activeBg, badge 
       {count > 0 && (
         <span className={`text-[8px] px-1 py-0.5 rounded-full font-bold ${active ? 'bg-arb-bg3' : 'bg-arb-bg3'}`}>{count}</span>
       )}
-      {badge && !active && (
-        <span className="text-[7px] text-arb-amber border border-arb-amber/30 px-1 py-0.5 rounded ml-0.5">{badge}</span>
-      )}
+      {/* badge prop removed — was static/fake volume figure */}
     </button>
   );
 }
