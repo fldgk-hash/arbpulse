@@ -60,6 +60,7 @@ export default {
           blue: "hsl(var(--arb-blue))",
           purple: "hsl(var(--arb-purple))",
           cyan: "hsl(var(--arb-cyan))",
+          pink: "hsl(var(--arb-pink))",
           border: "hsl(var(--arb-border))",
           border2: "hsl(var(--arb-border2))",
           border3: "hsl(var(--arb-border3))",
