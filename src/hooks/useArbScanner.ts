@@ -309,7 +309,7 @@ export function useArbScanner() {
 
   const [filters, setFilters] = useState<ScannerFilters>({
     minSpread: 0.04, minProfit: 0.5, tradeSize: 1000,
-    alertThreshold: 0.5, showTri: true, showCross: true, autoRefresh: true,
+    alertThreshold: 0.5, showTri: true, showCross: true, autoRefresh: false,
     dexMinLiq: 1000, dexMinVol: 200, dexMinSpread: 0.1,
     dexSafeOnly: true, dexNewOnly: false, dexSort: 'spread',
     dexChain: 'solana',
@@ -795,12 +795,14 @@ export function useArbScanner() {
     const all: string[] = [];
     const add = (addr: string) => { if (addr && !seen.has(addr)) { seen.add(addr); all.push(addr); } };
 
-    // 1. KNOWN multi-DEX tokens — always first
+    // 1. KNOWN multi-DEX tokens — always first (these reliably have pairs on PancakeSwap, Biswap, THENA, etc.)
     BSC_KNOWN_MULTI_DEX.forEach(add);
 
-    // 2. Discover NEW and TRENDING BSC tokens from multiple DexScreener endpoints
+    // 2. Use BSC-specific DexScreener endpoints that actually return BSC pairs
+    //    NOTE: search queries like "WBNB" return Solana/ETH wrapped versions, NOT BSC pairs.
+    //    Instead, use token-boosts/profiles filtered to BSC, and pairs endpoint by chain.
     const searches = await Promise.allSettled([
-      // Token boosts — BSC tokens getting promoted (includes new launches)
+      // Token boosts — BSC tokens getting promoted
       fetchDSEndpoint(
         'https://api.dexscreener.com/token-boosts/top/v1',
         'bsc-boosts',
@@ -812,41 +814,24 @@ export function useArbScanner() {
         'bsc-profiles',
         (t: any) => t.chainId === 'bsc' && t.tokenAddress
       ),
-      // Search for new BSC pairs — broad search with LOW liquidity threshold to catch new tokens
+      // Use pairs endpoint filtered by BSC chain — search for major quote tokens
       fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=bnb+new',
-        'bsc-new',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 500
+        'https://api.dexscreener.com/latest/dex/pairs/bsc/0x16b9a82891338f9bA80E2D6970FddA79D1eb0daE,0x172fcD41E0913e95784454622d1c3724f546f849,0x58F876857a02D6762E0101bb5C46A8c1ED44Dc16,0x7EFaEf62fDdCCa950418312c6C91Aef321375A00,0x0eD7e52944161450477ee417DE9Cd3a859b14fD0',
+        'bsc-pairs-1',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address
       ),
-      // Search for trending meme/new tokens on BSC
+      // More popular BSC pairs (PancakeSwap V3 pools)
       fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=pancakeswap+bsc',
-        'bsc-pcs',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 1000
-      ),
-      // Established liquid pairs for arb detection
-      fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=WBNB',
-        'bsc-wbnb',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 5000
-      ),
-      fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=CAKE+BNB',
-        'bsc-cake',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 5000
-      ),
-      // Search specifically for recently created BSC pairs
-      fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=bsc',
-        'bsc-generic',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 200
+        'https://api.dexscreener.com/latest/dex/pairs/bsc/0x36696169C63e42cd08ce11f5deeBbCeBae652050,0x92b7807bF19b7DDdf89b706143896d05228f3121,0x7f51c8AaA6B0599aBd16674e2b17FEc7a9f674A1',
+        'bsc-pairs-2',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address
       ),
     ]);
     searches.forEach(res => {
       if (res.status === 'fulfilled') res.value.forEach((a: string) => add(a));
     });
 
-    addLog(`BSC trending: ${all.length} unique tokens queued (incl. new/boosted)`, 'info');
+    addLog(`BSC trending: ${all.length} unique tokens queued`, 'info');
     return all.slice(0, 60);
   }, [fetchDSEndpoint, addLog]);
 
