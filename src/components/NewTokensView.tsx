@@ -33,7 +33,7 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
   }, [newPairs, chainFilter, arbOnly, minLiq, ageFilter]); // now computed inside memo
 
   const arbCount = filtered.filter(p => p.hasMultiDex).length;
-  const freshCount = filtered.filter(p => p.createdAt && (now - p.createdAt) < 3600000).length;
+  const freshCount = filtered.filter(p => p.createdAt && (Date.now() - p.createdAt) < 3600000).length;
 
   return (
     <div className="flex flex-col gap-2 p-2.5 overflow-y-auto flex-1 bg-arb-bg">
