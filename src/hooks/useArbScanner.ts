@@ -214,12 +214,31 @@ export interface ScannerFilters {
   cexInterval: number; dexInterval: number;
 }
 
+export interface NewPairEntry {
+  id: string;
+  chain: 'solana' | 'bsc';
+  symbol: string;
+  name: string;
+  mint: string;
+  pairAddr: string;
+  dex: string;
+  price: number;
+  liq: number;
+  vol: number;
+  createdAt: number | null;
+  seenAt: number;         // timestamp when WE first saw it
+  hasMultiDex: boolean;   // token appears on 2+ DEXes this scan → arb potential
+  arbSpread: number | null;
+  safety: SafetyResult | null;
+}
+
 export interface ScannerState {
   running: boolean; scanCount: number; totalScanned: number;
   bestProfit: number; hrProfit: number; sessionOpps: number;
   prices: Record<string, PriceData>;
   cexOpps: CexOpp[]; dexOpps: DexOpp[]; filteredDexOpps: DexOpp[];
   bscOpps: DexOpp[]; filteredBscOpps: DexOpp[];
+  newPairs: NewPairEntry[];
   logs: LogEntry[]; history: HistoryEntry[];
   exchangeStatuses: Record<string, ExchangeStatus>;
   soundOn: boolean; countdownPct: number; countdownSec: number; scanProgress: number;
@@ -278,6 +297,7 @@ export function useArbScanner() {
     bestProfit: 0, hrProfit: 0, sessionOpps: 0,
     prices: {}, cexOpps: [], dexOpps: [], filteredDexOpps: [],
     bscOpps: [], filteredBscOpps: [],
+    newPairs: [],
     logs: [], history: [],
     exchangeStatuses: Object.fromEntries(EXCHANGES.map(e => [e.id, { id: e.id, ok: false, msg: 'Init' }])),
     soundOn: false, countdownPct: 0, countdownSec: 0, scanProgress: 0,
@@ -315,6 +335,7 @@ export function useArbScanner() {
   const soundOnRef = useRef(false);
   const safeCache = useRef<Record<string, SafetyResult | null>>({});
   const knownPairs = useRef<Set<string>>(new Set());
+  const newPairsRef = useRef<NewPairEntry[]>([]);
   const dexOppsRef = useRef<DexOpp[]>([]);
   const bscOppsRef = useRef<DexOpp[]>([]);
   const bscTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -584,17 +605,54 @@ export function useArbScanner() {
 
     addLog(`DS: ${allPairs.length} total ${chain.toUpperCase()} pairs received`, 'info');
 
-    // New pair detection
+    const seenAt = Date.now();
+
+    // New pair detection — capture full data for NewTokens panel
     let newFound = 0;
+    // Build a map of token→dexIds for multi-DEX detection within this batch
+    const tokenDexMap: Record<string, Set<string>> = {};
     allPairs.forEach(pair => {
-      if (pair.pairAddress && !knownPairs.current.has(pair.pairAddress)) {
+      if (pair.chainId !== chain) return;
+      const addr = pair.baseToken?.address; if (!addr) return;
+      const dex = pair.dexId || 'unknown';
+      if (!tokenDexMap[addr]) tokenDexMap[addr] = new Set();
+      tokenDexMap[addr].add(dex);
+    });
+
+    allPairs.forEach(pair => {
+      if (!pair.pairAddress) return;
+      if (!knownPairs.current.has(pair.pairAddress)) {
         knownPairs.current.add(pair.pairAddress);
-        if (isNew(pair.pairCreatedAt)) newFound++;
+        if (isNew(pair.pairCreatedAt)) {
+          newFound++;
+          const addr = pair.baseToken?.address || '';
+          const dex = pair.dexId || 'unknown';
+          const dexCount = tokenDexMap[addr]?.size || 1;
+          const entry: NewPairEntry = {
+            id: pair.pairAddress,
+            chain,
+            symbol: pair.baseToken?.symbol || '?',
+            name: pair.baseToken?.name || '',
+            mint: addr,
+            pairAddr: pair.pairAddress,
+            dex,
+            price: parseFloat(pair.priceUsd || 0),
+            liq: pair.liquidity?.usd || 0,
+            vol: pair.volume?.h24 || 0,
+            createdAt: pair.pairCreatedAt || null,
+            seenAt,
+            hasMultiDex: dexCount >= 2,
+            arbSpread: null,   // filled in after fetchPairs completes
+            safety: null,
+          };
+          // Prepend — newest first
+          newPairsRef.current = [entry, ...newPairsRef.current].slice(0, 200);
+        }
       }
     });
     if (newFound > 0) {
       if (soundOnRef.current) beep(1100, 0.08);
-      setState(prev => ({ ...prev, newPairCount: prev.newPairCount + newFound }));
+      setState(prev => ({ ...prev, newPairCount: prev.newPairCount + newFound, newPairs: [...newPairsRef.current] }));
     }
 
     // Group by token
@@ -708,7 +766,15 @@ export function useArbScanner() {
     const raw = await fetchPairs(addrs);
     dexOppsRef.current = raw;
     const filtered = applyDexFilters(raw);
-    setState(prev => ({ ...prev, dexOpps: raw, filteredDexOpps: filtered, dexScanning: false, dexStatus: `${raw.length} opps · ${new Date().toLocaleTimeString()}` }));
+
+    // Backfill arbSpread on new pairs that now have confirmed multi-DEX opps
+    const oppByMint: Record<string, number> = {};
+    raw.forEach(o => { if (!oppByMint[o.mint] || o.spreadPct > oppByMint[o.mint]) oppByMint[o.mint] = o.spreadPct; });
+    newPairsRef.current = newPairsRef.current.map(p =>
+      p.chain === 'solana' && oppByMint[p.mint] ? { ...p, hasMultiDex: true, arbSpread: oppByMint[p.mint] } : p
+    );
+
+    setState(prev => ({ ...prev, dexOpps: raw, filteredDexOpps: filtered, dexScanning: false, dexStatus: `${raw.length} opps · ${new Date().toLocaleTimeString()}`, newPairs: [...newPairsRef.current] }));
 
     if (raw.length && soundOnRef.current) beep(780, 0.06);
 
@@ -792,7 +858,15 @@ export function useArbScanner() {
     const raw = await fetchPairs(addrs, 'bsc');
     bscOppsRef.current = raw;
     const filtered = applyDexFilters(raw);
-    setState(prev => ({ ...prev, bscOpps: raw, filteredBscOpps: filtered, bscScanning: false, bscStatus: `${raw.length} opps · ${new Date().toLocaleTimeString()}` }));
+
+    // Backfill arbSpread on new BSC pairs
+    const oppByMint: Record<string, number> = {};
+    raw.forEach(o => { if (!oppByMint[o.mint] || o.spreadPct > oppByMint[o.mint]) oppByMint[o.mint] = o.spreadPct; });
+    newPairsRef.current = newPairsRef.current.map(p =>
+      p.chain === 'bsc' && oppByMint[p.mint] ? { ...p, hasMultiDex: true, arbSpread: oppByMint[p.mint] } : p
+    );
+
+    setState(prev => ({ ...prev, bscOpps: raw, filteredBscOpps: filtered, bscScanning: false, bscStatus: `${raw.length} opps · ${new Date().toLocaleTimeString()}`, newPairs: [...newPairsRef.current] }));
     if (raw.length && soundOnRef.current) beep(920, 0.06);
 
     // Issue #1: Fetch RugCheck safety scores for BSC opps (same pattern as Solana)
@@ -1039,11 +1113,16 @@ export function useArbScanner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const clearNewPairs = useCallback(() => {
+    newPairsRef.current = [];
+    setState(prev => ({ ...prev, newPairs: [], newPairCount: 0 }));
+  }, []);
+
   return {
     state, filters, setFilters,
     toggleScanner, toggleSound, clearLogs, clearCexResults,
     runCexScan: () => runCexScan().then(schedCex),
     scanDex, scanBsc, logOpp, clearHistory, exportCSV,
-    setActiveView, refilterDex,
+    setActiveView, refilterDex, clearNewPairs,
   };
 }
