@@ -10,10 +10,9 @@ const VIEWS = [
   { id: 'dex',       icon: '🚀', label: 'DEX' },
   { id: 'new',       icon: '🆕', label: 'NEW' },
   { id: 'cex',       icon: '📊', label: 'CEX' },
-  { id: 'analytics', icon: '💰', label: 'History' },
-  { id: 'log',       icon: '📋', label: 'Log' },
-  { id: 'settings',  icon: '⚙️', label: '⚙' },
-];
+  { id: 'analytics', icon: '💰', label: 'Track' },
+  { id: 'settings',  icon: '⚙️', label: 'More' },
+]; // 5 tabs — Log merged into More/Settings
 
 export const BottomNav = memo(({ activeView, onSwitch, newPairCount }: BottomNavProps) => (
   <nav className="lg:hidden grid bg-arb-bg2 border-t border-arb-border2 flex-shrink-0"

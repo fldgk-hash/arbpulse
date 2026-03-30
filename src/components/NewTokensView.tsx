@@ -16,12 +16,12 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
   const [arbOnly, setArbOnly] = useState(false);
   const [minLiq, setMinLiq] = useState(0);
 
-  const now = Date.now();
   const AGE_MS: Record<AgeFilter, number> = {
     all: Infinity, '1h': 3600000, '6h': 21600000, '24h': 86400000,
   };
 
   const filtered = useMemo(() => {
+    const now = Date.now(); // computed inside memo so age is fresh on re-render
     return newPairs.filter(p => {
       if (chainFilter !== 'all' && p.chain !== chainFilter) return false;
       if (arbOnly && !p.hasMultiDex) return false;
@@ -30,7 +30,7 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
       if (age > AGE_MS[ageFilter]) return false;
       return true;
     });
-  }, [newPairs, chainFilter, arbOnly, minLiq, ageFilter, now]);
+  }, [newPairs, chainFilter, arbOnly, minLiq, ageFilter]); // now computed inside memo
 
   const arbCount = filtered.filter(p => p.hasMultiDex).length;
   const freshCount = filtered.filter(p => p.createdAt && (now - p.createdAt) < 3600000).length;

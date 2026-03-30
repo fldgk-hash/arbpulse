@@ -414,7 +414,7 @@ export function useArbScanner() {
   const connectWS = useCallback(() => {
     return new Promise<boolean>(resolve => {
       if (wsRef.current?.readyState === WebSocket.OPEN) { resolve(true); return; }
-      const st = SYMBOLS.slice(0, 30).map(s => `${s.toLowerCase()}usdt@bookTicker/${s.toLowerCase()}usdt@ticker`).join('/');
+      const st = SYMBOLS.map(s => `${s.toLowerCase()}usdt@bookTicker/${s.toLowerCase()}usdt@ticker`).join('/'); // All 40 symbols
       const w = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${st}`);
       wsRef.current = w;
       let done = false;
@@ -433,7 +433,7 @@ export function useArbScanner() {
         } catch {}
       };
       w.onerror = () => { setExStatus('binance', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
-      w.onclose = () => { wsRef.current = null; wsReadyRef.current = false; };
+      w.onclose = () => { wsRef.current = null; wsReadyRef.current = false; setTimeout(() => { if (runningRef.current) connectWS(); }, 5000); };
       setTimeout(() => { if (!done) { done = true; resolve(false); } }, 6000);
     });
   }, [addLog, setExStatus]);
@@ -460,7 +460,7 @@ export function useArbScanner() {
         } catch {}
       };
       w.onerror = () => { setExStatus('okx', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
-      w.onclose = () => { wsOKXRef.current = null; };
+      w.onclose = () => { wsOKXRef.current = null; setTimeout(() => { if (runningRef.current) connectOKX(); }, 6000); };
       setTimeout(() => { if (!done) { done = true; resolve(false); } }, 7000);
     });
   }, [addLog, setExStatus]);
@@ -486,7 +486,7 @@ export function useArbScanner() {
         } catch {}
       };
       w.onerror = () => { setExStatus('bybit', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
-      w.onclose = () => { wsBybitRef.current = null; };
+      w.onclose = () => { wsBybitRef.current = null; setTimeout(() => { if (runningRef.current) connectBybit(); }, 6000); };
       setTimeout(() => { if (!done) { done = true; resolve(false); } }, 7000);
     });
   }, [addLog, setExStatus]);
@@ -499,12 +499,7 @@ export function useArbScanner() {
       wsKrakenRef.current = w;
       let done = false;
       w.onopen = () => {
-        // Kraken WS v2 subscribe format
-        const v2Symbols = Object.values(KRAKEN_MAP).filter((v,i,a) => a.indexOf(v) === i).map(sym => {
-          const revEntry = Object.entries(KRAKEN_MAP).find(([k]) => k !== 'XBT/USD' ? k : 'BTC/USD');
-          return sym;
-        });
-        // Map our KRAKEN_PAIRS (v1 format) to v2 format (BTC/USD not XBT/USD)
+        // Kraken WS v2 — map XBT/USD → BTC/USD for v2 format
         const v2Pairs = KRAKEN_PAIRS.map(p => p === 'XBT/USD' ? 'BTC/USD' : p);
         w.send(JSON.stringify({ method: 'subscribe', params: { channel: 'ticker', symbol: v2Pairs } }));
         setExStatus('kraken', true, 'WS Live'); addLog('Kraken WS connected', 'ok');
@@ -526,7 +521,7 @@ export function useArbScanner() {
         } catch {}
       };
       w.onerror = () => { setExStatus('kraken', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
-      w.onclose = () => { wsKrakenRef.current = null; };
+      w.onclose = () => { wsKrakenRef.current = null; setTimeout(() => { if (runningRef.current) connectKraken(); }, 8000); };
       setTimeout(() => { if (!done) { done = true; resolve(false); } }, 7000);
     });
   }, [addLog, setExStatus]);
@@ -1093,7 +1088,7 @@ export function useArbScanner() {
     // BSC DEX auto-scan — staggered by 10s relative to Solana timer
     bscTimerRef.current = setInterval(() => {
       if (runningRef.current) scanBsc();
-    }, Math.max(30, (filtersRef.current.dexInterval || 20) + 10) * 1000);
+    }, Math.max(30000, ((filtersRef.current.dexInterval || 20) + 10) * 1000)); // +10s stagger from Solana timer
 
     // Request push notification permission
     if ('Notification' in window && Notification.permission === 'default') {
