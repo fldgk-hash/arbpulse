@@ -102,8 +102,8 @@ export const BSC_KNOWN_MULTI_DEX = [
 
 // Slippage constants — chain-specific
 // BSC: liquid pairs on major DEXes, $1k trade → ~0.05% slippage
-// Solana: small-cap pools, higher price impact → 0.5%
-const SOL_SLIP = 0.001; // 0.1% — realistic for $1k on Solana liquid pools
+// Solana: realistic for $1k on Raydium/Orca pools → 0.2% (was 0.5% — too aggressive, killed all opps)
+const SOL_SLIP = 0.002;
 const BSC_SLIP = 0.0005;
 
 const TRIPS = [
@@ -118,29 +118,18 @@ const TRIPS = [
 ];
 
 const KNOWN_MULTI_DEX = [
-  // ── Core liquid tokens: SOL ecosystem ──
-  'So11111111111111111111111111111111111111112',   // SOL (wrapped)
-  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', // USDC
-  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB', // USDT
-  'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263', // BONK
-  'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm', // WIF
-  '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr', // PEPE (SOL)
-  'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',  // JUP
-  'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE',  // ORCA
-  'MNDEFzGvMt87ueuHvVU9VcTqsAP5b3fTGPsHuuPA5ey',  // MNDE
-  // ── High-volume meme tokens on Raydium+Orca/Meteora ──
-  '4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R', // RAY (Raydium)
-  'mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So',  // mSOL
-  'J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn', // jitoSOL
-  'bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1',  // bSOL
-  '7vfCXTUXx5WJV5JADk17DUJ4ksgau7utNKj4b963voxs', // ETH (Wormhole)
-  'A9mUU4qviSctJVPJdBJWkb28deg915LYJKrzQ19ji3FM',  // USDC (Allbridge)
-  'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3', // PYTH
-  '5oVNBeEEQvYi1cX3ir8Dx5n1P7pdxydbGF2X4TxVusJm', // TRUMP
-  'Grass7B4RdKfBCjTKgSqnXkqjwiGvQyFbuSCUJr3XXjs', // GRASS
-  'MEFNBXixkEbait3xfUrpDSr2MkCmVfVto4BFKT8WBWF',  // ME (Magic Eden)
-  'ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82',  // BOME
-  'A8C3xuqscfmyLrte3VmTqrAq8kgMASius9AFNANwpump',  // PUMP
+  'So11111111111111111111111111111111111111112',
+  'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',
+  'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',
+  'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263',
+  'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm',
+  '7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr',
+  'A8C3xuqscfmyLrte3VmTqrAq8kgMASius9AFNANwpump',
+  'ukHH6c7mMyiWCf1b9pnWe25TSpkDDt3H5pQZgZ74J82',
+  'HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3',
+  'JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN',
+  'orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE',
+  'MNDEFzGvMt87ueuHvVU9VcTqsAP5b3fTGPsHuuPA5ey',
 ];
 
 export const SCAN_INTERVAL = 25000;
@@ -321,7 +310,7 @@ export function useArbScanner() {
   const [filters, setFilters] = useState<ScannerFilters>({
     minSpread: 0.04, minProfit: 0.5, tradeSize: 1000,
     alertThreshold: 0.5, showTri: true, showCross: true, autoRefresh: true,
-    dexMinLiq: 1000, dexMinVol: 200, dexMinSpread: 0.05, // lowered: real spreads are 0.05-0.3%
+    dexMinLiq: 1000, dexMinVol: 200, dexMinSpread: 0.1,
     dexSafeOnly: true, dexNewOnly: false, dexSort: 'spread',
     dexChain: 'solana',
     cexInterval: 25, dexInterval: 20,
@@ -369,11 +358,7 @@ export function useArbScanner() {
         setState(prev => ({ ...prev, countdownPct: pct, countdownSec: rem }));
         if (pct >= 100 && cdTimerRef.current) clearInterval(cdTimerRef.current);
       }, 500);
-      // Use a ref-based approach to avoid stale closure on schedCex
-      scanTimerRef.current = setTimeout(async () => {
-        await runCexScan();
-        schedCexRef.current?.();
-      }, iv);
+      scanTimerRef.current = setTimeout(() => runCexScan().then(() => schedCexRef.current()), iv);
     }
   }, [filters.cexInterval]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { runningRef.current = state.running; soundOnRef.current = state.soundOn; }, [state.running, state.soundOn]);
@@ -553,62 +538,25 @@ export function useArbScanner() {
     return out;
   }, []);
 
-  // ═══ SAFETY CHECK ═══
-  // Solana: RugCheck.xyz  |  BSC (EVM): GoPlus Security API (free, no key needed)
+  // ═══ RUGCHECK SAFETY ═══
   const fetchSafety = useCallback(async (mint: string): Promise<SafetyResult | null> => {
     if (!mint) return null;
     if (safeCache.current[mint] !== undefined) return safeCache.current[mint];
-    const isBscAddr = /^0x[0-9a-fA-F]{40}$/.test(mint);
-
     try {
-      if (isBscAddr) {
-        // GoPlus Security API — supports BSC EVM addresses, no API key needed
-        const r = await fetch(
-          `https://api.gopluslabs.io/api/v1/token_security/56?contract_addresses=${mint}`,
-          { signal: AbortSignal.timeout(6000) }
-        );
-        if (!r.ok) throw new Error('GoPlus HTTP ' + r.status);
-        const d = await r.json();
-        const result = d.result?.[mint.toLowerCase()];
-        if (!result) throw new Error('no result');
-        // Map GoPlus flags to our SafetyResult format
-        const risks: string[] = [];
-        if (result.is_honeypot === '1')          risks.push('Honeypot');
-        if (result.is_blacklisted === '1')        risks.push('Blacklisted');
-        if (result.is_mintable === '1')           risks.push('Mintable');
-        if (result.cannot_sell_all === '1')       risks.push('Cannot sell all');
-        if (result.is_proxy === '1')              risks.push('Proxy contract');
-        if (parseFloat(result.buy_tax  || '0') > 0.1) risks.push(`Buy tax ${(parseFloat(result.buy_tax)*100).toFixed(0)}%`);
-        if (parseFloat(result.sell_tax || '0') > 0.1) risks.push(`Sell tax ${(parseFloat(result.sell_tax)*100).toFixed(0)}%`);
-        // Score: count flags × 200, honeypot = 1000
-        const score = result.is_honeypot === '1' ? 1000 : Math.min(900, risks.length * 200);
-        const res: SafetyResult = { score, risks: risks.slice(0, 3), ok: result.is_honeypot !== '1' && risks.length === 0 };
-        safeCache.current[mint] = res; return res;
-      } else {
-        // RugCheck.xyz for Solana mint addresses
-        const r = await fetch(`https://api.rugcheck.xyz/v1/tokens/${mint}/report/summary`, { signal: AbortSignal.timeout(5000) });
-        if (!r.ok) throw new Error('' + r.status);
-        const d = await r.json();
-        const score = d.score || 0;
-        const risks = (d.risks || []).map((x: any) => x.name || x.description || '').filter(Boolean).slice(0, 3);
-        const res: SafetyResult = { score, risks, ok: score < 500 };
-        safeCache.current[mint] = res; return res;
-      }
+      const r = await fetch(`https://api.rugcheck.xyz/v1/tokens/${mint}/report/summary`, { signal: AbortSignal.timeout(5000) });
+      if (!r.ok) throw new Error('' + r.status);
+      const d = await r.json();
+      const score = d.score || 0;
+      const risks = (d.risks || []).map((x: any) => x.name || x.description || '').filter(Boolean).slice(0, 3);
+      const res: SafetyResult = { score, risks, ok: score < 500 };
+      safeCache.current[mint] = res; return res;
     } catch { safeCache.current[mint] = null; return null; }
   }, []);
 
   // ═══ DEXSCREENER ═══
-  const dsLastCall = useRef<Record<string, number>>({});
   const fetchDSEndpoint = useCallback(async (url: string, label: string, filterFn: (t: any) => boolean): Promise<string[]> => {
-    // Rate-limit guard: DexScreener free tier ~5 req/s → space calls by 300ms minimum
-    const now = Date.now();
-    const last = dsLastCall.current[label] || 0;
-    if (now - last < 300) await new Promise(r => setTimeout(r, 300 - (now - last)));
-    dsLastCall.current[label] = Date.now();
     try {
-      const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
-      if (r.status === 429) { addLog(`DS ${label}: rate limited — skipping`, 'warn'); return []; }
-      if (r.status === 403) { addLog(`DS ${label}: access denied (403)`, 'warn'); return []; }
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
       const items = Array.isArray(d) ? d : (d.pairs || d.tokens || []);
@@ -619,29 +567,19 @@ export function useArbScanner() {
   }, [addLog]);
 
   const getTrending = useCallback(async (): Promise<string[]> => {
-    const [boosts, profiles, volSearch, newSearch] = await Promise.allSettled([
-      // Boosted tokens: high chance of multi-DEX presence
-      fetchDSEndpoint('https://api.dexscreener.com/token-boosts/top/v1', 'boosts',
-        (t: any) => t.chainId === 'solana' && t.tokenAddress),
-      // Latest profiles: new tokens entering market
-      fetchDSEndpoint('https://api.dexscreener.com/token-profiles/latest/v1', 'profiles',
-        (t: any) => t.chainId === 'solana' && t.tokenAddress),
-      // High-volume Solana pairs — likely on multiple DEXes
-      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=solana+raydium', 'search-ray',
-        (t: any) => t.chainId === 'solana' && t.baseToken?.address && (t.liquidity?.usd || 0) > 5000),
-      // Meteora pairs — different DEX, different prices
-      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=meteora+sol', 'search-met',
-        (t: any) => t.chainId === 'solana' && t.baseToken?.address && (t.liquidity?.usd || 0) > 5000),
+    const [boosts, profiles, newPairs] = await Promise.allSettled([
+      fetchDSEndpoint('https://api.dexscreener.com/token-boosts/top/v1', 'boosts', (t: any) => t.chainId === 'solana' && t.tokenAddress),
+      fetchDSEndpoint('https://api.dexscreener.com/token-profiles/latest/v1', 'profiles', (t: any) => t.chainId === 'solana' && t.tokenAddress),
+      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=sol', 'search-sol', (t: any) => t.chainId === 'solana' && t.baseToken?.address),
     ]);
     const seen = new Set<string>();
     const all: string[] = [];
-    // KNOWN_MULTI_DEX first — highest priority, guaranteed multi-DEX
-    KNOWN_MULTI_DEX.forEach(a => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
-    for (const res of [boosts, profiles, volSearch, newSearch]) {
+    for (const res of [boosts, profiles, newPairs]) {
       if (res.status === 'fulfilled') res.value.forEach(a => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
     }
+    KNOWN_MULTI_DEX.forEach(a => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
     addLog(`Total unique Solana tokens: ${all.length}`, 'info');
-    return all.slice(0, 60); // 2 batches × 30
+    return all.slice(0, 45);
   }, [fetchDSEndpoint, addLog]);
 
   const fetchPairs = useCallback(async (addresses: string[], chain: 'solana' | 'bsc' = 'solana'): Promise<DexOpp[]> => {
@@ -788,7 +726,26 @@ export function useArbScanner() {
         }
       }
     }
-    addLog(`${chain.toUpperCase()} arb: ${Object.keys(byToken).length} tokens with 2+ DEXes → ${results.length} opps`, 'ok');
+    const multiDexCount = Object.values(byToken).filter(t => t.pairs.length >= 2).length;
+    addLog(`${chain.toUpperCase()} arb: ${multiDexCount} tokens with 2+ DEXes → ${results.length} opps`, 'ok');
+
+    // Spread telemetry — when 0 opps, surface the best raw spread so the user can
+    // distinguish "market is tight" from "something is broken".
+    if (results.length === 0 && multiDexCount > 0) {
+      let bestRaw = 0;
+      for (const token of Object.values(byToken)) {
+        if (token.pairs.length < 2) continue;
+        token.pairs.sort((a: any, b: any) => a.price - b.price);
+        for (let i = 0; i < token.pairs.length - 1; i++) {
+          const buy = token.pairs[i], sell = token.pairs[token.pairs.length - 1];
+          if (buy.price > 0) {
+            const raw = ((sell.price - buy.price) / buy.price) * 100;
+            if (raw > bestRaw) bestRaw = raw;
+          }
+        }
+      }
+      addLog(`${chain.toUpperCase()} best raw spread: ${bestRaw.toFixed(3)}% (fees+slip threshold ~${chain === 'bsc' ? ((BSC_SLIP * 2 + 0.003) * 100).toFixed(2) : ((SOL_SLIP * 2 + 0.005) * 100).toFixed(2)}%)`, 'warn');
+    }
     return results.sort((a, b) => b.net - a.net);
   }, [addLog]);
 
@@ -853,48 +810,41 @@ export function useArbScanner() {
 
   // ═══ BSC TRENDING ═══
   const getBscTrending = useCallback(async (): Promise<string[]> => {
-    // Strategy: find tokens confirmed on 2+ BSC DEXes.
-    // `/latest/dex/pairs/bsc/{dexName}` does NOT exist in DexScreener API.
-    // Correct endpoints:
-    //   - /token-pairs/v1/bsc/{tokenAddress}  → all pairs for a token on BSC
-    //   - /latest/dex/tokens/{addresses}       → pairs for multiple tokens
-    //   - /latest/dex/search?q={query}         → search
-
     const seen = new Set<string>();
     const all: string[] = [];
     const add = (addr: string) => { if (addr && !seen.has(addr)) { seen.add(addr); all.push(addr); } };
 
-    // 1. KNOWN multi-DEX tokens — always first, never cut by slice
+    // 1. KNOWN multi-DEX tokens — always first (these reliably have pairs on PancakeSwap, Biswap, THENA, etc.)
     BSC_KNOWN_MULTI_DEX.forEach(add);
 
-    // 2. Discover more via search queries targeting liquid BSC pairs
-    //    These searches yield tokens that appear across multiple DEXes
+    // 2. Use BSC-specific DexScreener endpoints that actually return BSC pairs
+    //    NOTE: search queries like "WBNB" return Solana/ETH wrapped versions, NOT BSC pairs.
+    //    Instead, use token-boosts/profiles filtered to BSC, and pairs endpoint by chain.
     const searches = await Promise.allSettled([
-      // High-TVL BSC pairs across multiple DEXes
+      // Token boosts — BSC tokens getting promoted
+      // DexScreener uses 'bsc' internally but some API versions return 'binance-smart-chain'
       fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=pancakeswap+WBNB',
-        'bsc-wbnb',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 30000
+        'https://api.dexscreener.com/token-boosts/top/v1',
+        'bsc-boosts',
+        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
       ),
+      // Token profiles — recently created BSC token profiles
       fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=pancakeswap+CAKE',
-        'bsc-cake',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 20000
+        'https://api.dexscreener.com/token-profiles/latest/v1',
+        'bsc-profiles',
+        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
       ),
+      // Use pairs endpoint filtered by BSC chain — search for major quote tokens
       fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=biswap+BNB',
-        'bsc-biswap',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 20000
+        'https://api.dexscreener.com/latest/dex/pairs/bsc/0x16b9a82891338f9bA80E2D6970FddA79D1eb0daE,0x172fcD41E0913e95784454622d1c3724f546f849,0x58F876857a02D6762E0101bb5C46A8c1ED44Dc16,0x7EFaEf62fDdCCa950418312c6C91Aef321375A00,0x0eD7e52944161450477ee417DE9Cd3a859b14fD0',
+        'bsc-pairs-1',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address
       ),
+      // More popular BSC pairs (PancakeSwap V3 pools)
       fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=thena+BNB',
-        'bsc-thena',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 10000
-      ),
-      fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=uniswap+BSC',
-        'bsc-uni',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 30000
+        'https://api.dexscreener.com/latest/dex/pairs/bsc/0x36696169C63e42cd08ce11f5deeBbCeBae652050,0x92b7807bF19b7DDdf89b706143896d05228f3121,0x7f51c8AaA6B0599aBd16674e2b17FEc7a9f674A1',
+        'bsc-pairs-2',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address
       ),
     ]);
     searches.forEach(res => {
@@ -902,7 +852,7 @@ export function useArbScanner() {
     });
 
     addLog(`BSC trending: ${all.length} unique tokens queued`, 'info');
-    return all.slice(0, 60); // 2 batches × 30
+    return all.slice(0, 60);
   }, [fetchDSEndpoint, addLog]);
 
   // ═══ SCAN BSC ═══
@@ -998,10 +948,14 @@ export function useArbScanner() {
     if (!ok) { addLog('No CEX data', 'err'); setState(prev => ({ ...prev, scanProgress: 0 })); return; }
     buildCP();
 
-    // Connect other WSes
-    if (!wsOKXRef.current || wsOKXRef.current.readyState !== WebSocket.OPEN) connectOKX();
-    if (!wsBybitRef.current || wsBybitRef.current.readyState !== WebSocket.OPEN) connectBybit();
-    if (!wsKrakenRef.current || wsKrakenRef.current.readyState !== WebSocket.OPEN) connectKraken();
+    // Ensure CEX WebSocket connections are alive — skip if already OPEN or CONNECTING
+    // Bug fix: checking only for OPEN caused a new connection to be created while one was
+    // still in CONNECTING state (readyState=0), producing the repeated "OKX WS connected" logs.
+    const wsAlive = (ws: WebSocket | null) =>
+      ws !== null && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING);
+    if (!wsAlive(wsOKXRef.current)) connectOKX();
+    if (!wsAlive(wsBybitRef.current)) connectBybit();
+    if (!wsAlive(wsKrakenRef.current)) connectKraken();
 
     const okx = getExPrices('okx'), bybit = getExPrices('bybit'), kraken = getExPrices('kraken');
     const tri = calcTri(), cross = calcCross(okx, bybit, kraken);
@@ -1028,11 +982,11 @@ export function useArbScanner() {
   const stateRef = useRef(state);
   useEffect(() => { stateRef.current = state; }, [state]);
 
-  // Ref to always-current schedCex (avoids stale closures in effects)
-  const schedCexRef = useRef<(() => void) | null>(null);
-
   // ═══ SCHEDULING ═══
-  // Restart DEX timers when dexInterval changes
+  // schedCexRef always holds the latest schedCex — fixes the stale-closure bug where
+  // setTimeout fires the old version of schedCex captured at creation time, breaking
+  // auto-refresh whenever runCexScan is recreated due to dependency changes.
+  const schedCexRef = useRef<() => void>(() => {});
   useEffect(() => {
     if (!dexTimerRef.current && !bscTimerRef.current) return; // Not yet booted
     if (dexTimerRef.current) clearInterval(dexTimerRef.current);
@@ -1055,11 +1009,12 @@ export function useArbScanner() {
       setState(prev => ({ ...prev, countdownPct: pct, countdownSec: rem }));
       if (pct >= 100 && cdTimerRef.current) clearInterval(cdTimerRef.current);
     }, 500);
-    scanTimerRef.current = setTimeout(() => { runCexScan().then(schedCex); }, iv);
+    // Use ref to always call the latest schedCex — avoids stale closure when
+    // runCexScan is recreated, which previously broke the auto-refresh chain.
+    scanTimerRef.current = setTimeout(() => { runCexScan().then(() => schedCexRef.current()); }, iv);
   }, [runCexScan]);
-
-  // Keep ref current
-  schedCexRef.current = schedCex;
+  // Keep ref in sync whenever schedCex is recreated
+  useEffect(() => { schedCexRef.current = schedCex; }, [schedCex]);
 
   // ═══ HISTORY / LOG ═══
   const logOpp = useCallback((opp: DexOpp | CexOpp) => {
@@ -1108,7 +1063,7 @@ export function useArbScanner() {
       const next = !prev.running;
       if (next) {
         addLog('Resumed', 'ok');
-        setTimeout(() => { runCexScan().then(schedCex); scanDex(); setTimeout(() => scanBsc(), 3000); }, 100);
+        setTimeout(() => { runCexScan().then(() => schedCexRef.current()); scanDex(); setTimeout(() => scanBsc(), 3000); }, 100);
       } else {
         addLog('Paused', 'warn');
         if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
@@ -1116,7 +1071,7 @@ export function useArbScanner() {
       }
       return { ...prev, running: next };
     });
-  }, [addLog, runCexScan, schedCex, scanDex, scanBsc]); // scanBsc added to fix stale closure
+  }, [addLog, runCexScan, scanDex]);
 
   const toggleSound = useCallback(() => {
     setState(prev => {
@@ -1140,11 +1095,11 @@ export function useArbScanner() {
     addLog('ArbPulse Pro v9.0 — Solana + BSC DEX · CEX multi-exchange scanner', 'ok');
     addLog('Chains: Solana · BNB Smart Chain · Safety: RugCheck.xyz · CEX: 4x WS', 'info');
 
-    // Connect all WS
+    // Connect all WS — done ONCE here, never re-created inside runCexScan
     Promise.all([connectOKX(), connectBybit(), connectKraken()]).then(() => addLog('All exchange WS connected', 'ok'));
 
     // Initial scans
-    runCexScan().then(schedCex);
+    runCexScan().then(() => schedCexRef.current());
     scanDex();
     // Stagger BSC scan by 3s to avoid API rate limits
     setTimeout(() => scanBsc(), 3000);
@@ -1157,7 +1112,7 @@ export function useArbScanner() {
     // BSC DEX auto-scan — staggered by 10s relative to Solana timer
     bscTimerRef.current = setInterval(() => {
       if (runningRef.current) scanBsc();
-    }, Math.max(30000, ((filtersRef.current.dexInterval || 20) + 10) * 1000)); // +10s stagger from Solana timer
+    }, Math.max(30000, ((filtersRef.current.dexInterval || 20) + 10) * 1000));
 
     // Request push notification permission
     if ('Notification' in window && Notification.permission === 'default') {
@@ -1185,7 +1140,7 @@ export function useArbScanner() {
   return {
     state, filters, setFilters,
     toggleScanner, toggleSound, clearLogs, clearCexResults,
-    runCexScan: () => runCexScan().then(schedCex),
+    runCexScan: () => runCexScan().then(() => schedCexRef.current()),
     scanDex, scanBsc, logOpp, clearHistory, exportCSV,
     setActiveView, refilterDex, clearNewPairs,
   };
