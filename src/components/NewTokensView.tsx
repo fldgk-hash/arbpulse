@@ -32,9 +32,8 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
     });
   }, [newPairs, chainFilter, arbOnly, minLiq, ageFilter]); // now computed inside memo
 
-  const nowTs = Date.now();
   const arbCount = filtered.filter(p => p.hasMultiDex).length;
-  const freshCount = filtered.filter(p => p.createdAt && (nowTs - p.createdAt) < 3600000).length;
+  const freshCount = filtered.filter(p => p.createdAt && (Date.now() - p.createdAt) < 3600000).length;
 
   return (
     <div className="flex flex-col gap-2 p-2.5 overflow-y-auto flex-1 bg-arb-bg">
@@ -103,9 +102,19 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
         {/* Min liquidity */}
         <div className="flex items-center gap-1 text-[9px] text-arb-muted">
           <span>Liq $</span>
-          <input type="number" value={minLiq} step={1000} min={0}
-            onChange={e => setMinLiq(parseFloat(e.target.value) || 0)}
-            className="w-[62px] bg-arb-bg3 border border-arb-border2 text-arb-head px-1.5 py-0.5 font-mono text-[10px] rounded outline-none focus:border-arb-green" />
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={minLiq === 0 ? '' : minLiq.toString()}
+            placeholder="0"
+            onFocus={e => e.target.select()}
+            onChange={e => {
+              const v = e.target.value.replace(/[^0-9]/g, '');
+              setMinLiq(v === '' ? 0 : parseInt(v, 10));
+            }}
+            className="w-[62px] bg-arb-bg3 border border-arb-border2 text-arb-head px-1.5 py-0.5 font-mono text-[10px] rounded outline-none focus:border-arb-green"
+          />
         </div>
       </div>
 
@@ -129,10 +138,10 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
 /* ─── Card ──────────────────────────────────────────────────────────────────── */
 function NewPairCard({ pair: p }: { pair: NewPairEntry }) {
   const [copied, setCopied] = useState(false);
-  const nowMs = Date.now();
-  const ageMs = p.createdAt ? nowMs - p.createdAt : nowMs - p.seenAt;
-  const isFresh = ageMs < 3600000;
-  const isVFresh = ageMs < 1800000;
+  const now = Date.now();
+  const ageMs = p.createdAt ? now - p.createdAt : now - p.seenAt;
+  const isFresh = ageMs < 3600000;      // < 1h
+  const isVFresh = ageMs < 1800000;     // < 30min — pulse animation
   const isBsc = p.chain === 'bsc';
 
   const dsUrl = isBsc

@@ -110,13 +110,17 @@ const Index = () => {
         {view === 'log' ? (
           <LogPanel state={state} onClearLogs={clearLogs} />
         ) : view === 'settings' ? (
-          <div className="flex-1 overflow-y-auto bg-arb-bg2">
+          // BUG FIX: Log was completely unreachable on mobile — no BottomNav tab ever
+          // routed to 'log'. Fix: show LogPanel + Sidebar together under "More" tab.
+          <div className="flex-1 overflow-y-auto bg-arb-bg2 flex flex-col">
+            <LogPanel state={state} onClearLogs={clearLogs} />
+            <div className="border-t border-arb-border" />
             <Sidebar state={state} filters={filters} setFilters={setFilters} onManualScan={runCexScan} onClearResults={clearCexResults} />
           </div>
         ) : renderMainView()}
       </div>
 
-      <BottomNav activeView={view} onSwitch={setActiveView} newPairCount={state.newPairCount} />
+      <BottomNav activeView={view} onSwitch={setActiveView} newPairCount={state.newPairCount} errorLogCount={state.logs.filter(l => l.type === 'err' || l.type === 'warn').length} />
 
       {calcOpp && (
         <TradeCalculator opp={calcOpp} onClose={() => setCalcOpp(null)} onLog={logOpp} defaultTradeSize={filters.tradeSize} />
