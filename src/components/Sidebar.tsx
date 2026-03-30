@@ -96,23 +96,6 @@ export const Sidebar = memo(({ state, filters, setFilters, onManualScan, onClear
 
       <Divider />
 
-      {/* Safety providers */}
-      <Section title="Safety Providers">
-        <div className="bg-arb-bg3 border border-arb-border rounded p-2.5 text-[9px] leading-relaxed">
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="text-arb-green font-bold">◎ Solana</span>
-            <span className="text-arb-muted">RugCheck.xyz</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-arb-amber font-bold">🟡 BSC</span>
-            <span className="text-arb-muted">GoPlus Security API</span>
-          </div>
-          <div className="text-arb-muted mt-1.5 text-[8px]">Scores update in background after each scan.</div>
-        </div>
-      </Section>
-
-      <Divider />
-
       {/* Actions */}
       <Section title="">
         <button onClick={onManualScan} className="w-full p-2 bg-transparent border border-arb-green text-arb-green font-sans text-[11px] font-semibold tracking-wider uppercase cursor-pointer transition-all rounded hover:bg-arb-green/10">

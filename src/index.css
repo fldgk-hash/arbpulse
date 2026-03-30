@@ -145,9 +145,3 @@
 .animate-fade-in { animation: fade-in 0.3s ease; }
 .animate-spin-loader { animation: spin-loader 0.7s linear infinite; }
 .animate-ticker { animation: ticker-move 20s linear infinite; }
-@keyframes pulse-border {
-  0%, 100% { border-color: hsl(var(--arb-green) / 0.2); box-shadow: 0 0 0 0 hsl(var(--arb-green) / 0.1); }
-  50% { border-color: hsl(var(--arb-green) / 0.6); box-shadow: 0 0 8px 2px hsl(var(--arb-green) / 0.15); }
-}
-
-.animate-pulse-border { animation: pulse-border 2s ease-in-out infinite; }
