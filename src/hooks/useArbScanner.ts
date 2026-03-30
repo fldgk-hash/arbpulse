@@ -100,7 +100,11 @@ export const BSC_KNOWN_MULTI_DEX = [
   '0x101d82428437127bF1608F699CD651e6Abf9766E', // BAT (BSC)
 ];
 
-const SLIP = 0.005;
+// Slippage constants — chain-specific
+// BSC: liquid pairs on major DEXes, $1k trade → ~0.05% slippage
+// Solana: small-cap pools, higher price impact → 0.5%
+const SOL_SLIP = 0.005;
+const BSC_SLIP = 0.0005;
 
 const TRIPS = [
   ['BTCUSDT','ETHBTC','ETHUSDT'],['BTCUSDT','BNBBTC','BNBUSDT'],
@@ -641,6 +645,7 @@ export function useArbScanner() {
           if (sell.price <= buy.price) continue;
           const rawSpread = ((sell.price - buy.price) / buy.price) * 100;
           const feeMap = chain === 'bsc' ? BSC_DEX_FEES : DEX_FEES;
+          const SLIP = chain === 'bsc' ? BSC_SLIP : SOL_SLIP;
           const bF = feeMap[buy.dex] || (chain === 'bsc' ? 0.0025 : 0.003), sF = feeMap[sell.dex] || (chain === 'bsc' ? 0.0025 : 0.003);
           const eB = buy.price * (1 + bF + SLIP), eS = sell.price * (1 - sF - SLIP);
           if (eS <= eB) continue;
@@ -725,12 +730,12 @@ export function useArbScanner() {
 
   // ═══ BSC TRENDING ═══
   const getBscTrending = useCallback(async (): Promise<string[]> => {
-    // Strategy: Arbitrage needs tokens on 2+ DEXes.
-    // token-boosts/profiles = memecoins on 1 DEX → WRONG source.
-    // Correct approach:
-    //   1. KNOWN multi-DEX tokens first (guaranteed 2+ DEX presence)
-    //   2. Fetch top pairs from each major BSC DEX → extract tokens appearing on 2+ DEXes
-    //   3. Search by liquid quote tokens (WBNB, USDT) to find established pairs
+    // Strategy: find tokens confirmed on 2+ BSC DEXes.
+    // `/latest/dex/pairs/bsc/{dexName}` does NOT exist in DexScreener API.
+    // Correct endpoints:
+    //   - /token-pairs/v1/bsc/{tokenAddress}  → all pairs for a token on BSC
+    //   - /latest/dex/tokens/{addresses}       → pairs for multiple tokens
+    //   - /latest/dex/search?q={query}         → search
 
     const seen = new Set<string>();
     const all: string[] = [];
@@ -739,55 +744,41 @@ export function useArbScanner() {
     // 1. KNOWN multi-DEX tokens — always first, never cut by slice
     BSC_KNOWN_MULTI_DEX.forEach(add);
 
-    // 2. Fetch top pairs per DEX in parallel — find tokens on multiple DEXes
-    const DEX_ENDPOINTS = [
-      'https://api.dexscreener.com/latest/dex/pairs/bsc/pancakeswap-v3',
-      'https://api.dexscreener.com/latest/dex/pairs/bsc/pancakeswap-v2',
-      'https://api.dexscreener.com/latest/dex/pairs/bsc/uniswap-v3-bsc',
-      'https://api.dexscreener.com/latest/dex/pairs/bsc/biswap',
-      'https://api.dexscreener.com/latest/dex/pairs/bsc/thena-v3',
-    ];
-
-    const dexResults = await Promise.allSettled(
-      DEX_ENDPOINTS.map(url =>
-        fetch(url, { signal: AbortSignal.timeout(10000) })
-          .then(r => r.ok ? r.json() : null)
-          .then(d => (d?.pairs || []).map((p: any) => p.baseToken?.address).filter(Boolean) as string[])
-          .catch(() => [] as string[])
-      )
-    );
-
-    // Count how many DEXes each token appears on
-    const dexCount: Record<string, number> = {};
-    dexResults.forEach(res => {
-      if (res.status !== 'fulfilled') return;
-      const uniq = [...new Set(res.value)]; // dedupe within same DEX
-      uniq.forEach(addr => { dexCount[addr] = (dexCount[addr] || 0) + 1; });
-    });
-
-    // Add tokens appearing on 2+ DEXes first (highest priority)
-    Object.entries(dexCount)
-      .filter(([, count]) => count >= 2)
-      .sort(([, a], [, b]) => b - a)
-      .forEach(([addr]) => add(addr));
-
-    // Then add tokens on at least 1 DEX (might have more pairs we don't know yet)
-    Object.entries(dexCount)
-      .filter(([, count]) => count === 1)
-      .forEach(([addr]) => add(addr));
-
-    // 3. Search by liquid quote tokens for further discovery
+    // 2. Discover more via search queries targeting liquid BSC pairs
+    //    These searches yield tokens that appear across multiple DEXes
     const searches = await Promise.allSettled([
-      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=WBNB', 'bsc-wbnb', (t: any) => t.chainId === 'bsc' && t.baseToken?.address !== '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c' && t.baseToken?.address),
-      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=CAKE', 'bsc-cake', (t: any) => t.chainId === 'bsc' && t.baseToken?.address),
-      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=USDT+bsc', 'bsc-usdt', (t: any) => t.chainId === 'bsc' && t.baseToken?.address),
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=WBNB',
+        'bsc-wbnb',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && t.liquidity?.usd > 50000
+      ),
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=CAKE+BNB',
+        'bsc-cake',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && t.liquidity?.usd > 20000
+      ),
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=ETH+BNB',
+        'bsc-eth',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && t.liquidity?.usd > 50000
+      ),
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=USDT+BNB',
+        'bsc-usdt',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && t.liquidity?.usd > 50000
+      ),
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=BTC+BNB',
+        'bsc-btc',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && t.liquidity?.usd > 50000
+      ),
     ]);
     searches.forEach(res => {
       if (res.status === 'fulfilled') res.value.forEach((a: string) => add(a));
     });
 
-    addLog(`BSC: ${all.length} unique tokens (${Object.values(dexCount).filter(c => c >= 2).length} confirmed multi-DEX)`, 'info');
-    return all.slice(0, 60); // 2 batches × 30 = 60 max
+    addLog(`BSC trending: ${all.length} unique tokens queued`, 'info');
+    return all.slice(0, 60); // 2 batches × 30
   }, [fetchDSEndpoint, addLog]);
 
   // ═══ SCAN BSC ═══
