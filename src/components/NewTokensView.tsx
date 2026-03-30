@@ -32,8 +32,9 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
     });
   }, [newPairs, chainFilter, arbOnly, minLiq, ageFilter]); // now computed inside memo
 
+  const nowTs = Date.now();
   const arbCount = filtered.filter(p => p.hasMultiDex).length;
-  const freshCount = filtered.filter(p => p.createdAt && (Date.now() - p.createdAt) < 3600000).length;
+  const freshCount = filtered.filter(p => p.createdAt && (nowTs - p.createdAt) < 3600000).length;
 
   return (
     <div className="flex flex-col gap-2 p-2.5 overflow-y-auto flex-1 bg-arb-bg">
@@ -128,10 +129,10 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
 /* ─── Card ──────────────────────────────────────────────────────────────────── */
 function NewPairCard({ pair: p }: { pair: NewPairEntry }) {
   const [copied, setCopied] = useState(false);
-  const now = Date.now();
-  const ageMs = p.createdAt ? now - p.createdAt : now - p.seenAt;
-  const isFresh = ageMs < 3600000;      // < 1h
-  const isVFresh = ageMs < 1800000;     // < 30min — pulse animation
+  const nowMs = Date.now();
+  const ageMs = p.createdAt ? nowMs - p.createdAt : nowMs - p.seenAt;
+  const isFresh = ageMs < 3600000;
+  const isVFresh = ageMs < 1800000;
   const isBsc = p.chain === 'bsc';
 
   const dsUrl = isBsc
