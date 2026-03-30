@@ -102,8 +102,8 @@ export const BSC_KNOWN_MULTI_DEX = [
 
 // Slippage constants — chain-specific
 // BSC: liquid pairs on major DEXes, $1k trade → ~0.05% slippage
-// Solana: small-cap pools, higher price impact → 0.5%
-const SOL_SLIP = 0.005;
+// Solana: realistic for $1k on Raydium/Orca pools → 0.2% (was 0.5% — too aggressive, killed all opps)
+const SOL_SLIP = 0.002;
 const BSC_SLIP = 0.0005;
 
 const TRIPS = [
@@ -358,7 +358,7 @@ export function useArbScanner() {
         setState(prev => ({ ...prev, countdownPct: pct, countdownSec: rem }));
         if (pct >= 100 && cdTimerRef.current) clearInterval(cdTimerRef.current);
       }, 500);
-      scanTimerRef.current = setTimeout(() => runCexScan().then(schedCex), iv);
+      scanTimerRef.current = setTimeout(() => runCexScan().then(() => schedCexRef.current()), iv);
     }
   }, [filters.cexInterval]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { runningRef.current = state.running; soundOnRef.current = state.soundOn; }, [state.running, state.soundOn]);
@@ -726,7 +726,26 @@ export function useArbScanner() {
         }
       }
     }
-    addLog(`${chain.toUpperCase()} arb: ${Object.keys(byToken).length} tokens with 2+ DEXes → ${results.length} opps`, 'ok');
+    const multiDexCount = Object.values(byToken).filter(t => t.pairs.length >= 2).length;
+    addLog(`${chain.toUpperCase()} arb: ${multiDexCount} tokens with 2+ DEXes → ${results.length} opps`, 'ok');
+
+    // Spread telemetry — when 0 opps, surface the best raw spread so the user can
+    // distinguish "market is tight" from "something is broken".
+    if (results.length === 0 && multiDexCount > 0) {
+      let bestRaw = 0;
+      for (const token of Object.values(byToken)) {
+        if (token.pairs.length < 2) continue;
+        token.pairs.sort((a: any, b: any) => a.price - b.price);
+        for (let i = 0; i < token.pairs.length - 1; i++) {
+          const buy = token.pairs[i], sell = token.pairs[token.pairs.length - 1];
+          if (buy.price > 0) {
+            const raw = ((sell.price - buy.price) / buy.price) * 100;
+            if (raw > bestRaw) bestRaw = raw;
+          }
+        }
+      }
+      addLog(`${chain.toUpperCase()} best raw spread: ${bestRaw.toFixed(3)}% (fees+slip threshold ~${chain === 'bsc' ? ((BSC_SLIP * 2 + 0.003) * 100).toFixed(2) : ((SOL_SLIP * 2 + 0.005) * 100).toFixed(2)}%)`, 'warn');
+    }
     return results.sort((a, b) => b.net - a.net);
   }, [addLog]);
 
@@ -803,16 +822,17 @@ export function useArbScanner() {
     //    Instead, use token-boosts/profiles filtered to BSC, and pairs endpoint by chain.
     const searches = await Promise.allSettled([
       // Token boosts — BSC tokens getting promoted
+      // DexScreener uses 'bsc' internally but some API versions return 'binance-smart-chain'
       fetchDSEndpoint(
         'https://api.dexscreener.com/token-boosts/top/v1',
         'bsc-boosts',
-        (t: any) => t.chainId === 'bsc' && t.tokenAddress
+        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
       ),
       // Token profiles — recently created BSC token profiles
       fetchDSEndpoint(
         'https://api.dexscreener.com/token-profiles/latest/v1',
         'bsc-profiles',
-        (t: any) => t.chainId === 'bsc' && t.tokenAddress
+        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
       ),
       // Use pairs endpoint filtered by BSC chain — search for major quote tokens
       fetchDSEndpoint(
@@ -928,10 +948,14 @@ export function useArbScanner() {
     if (!ok) { addLog('No CEX data', 'err'); setState(prev => ({ ...prev, scanProgress: 0 })); return; }
     buildCP();
 
-    // Connect other WSes
-    if (!wsOKXRef.current || wsOKXRef.current.readyState !== WebSocket.OPEN) connectOKX();
-    if (!wsBybitRef.current || wsBybitRef.current.readyState !== WebSocket.OPEN) connectBybit();
-    if (!wsKrakenRef.current || wsKrakenRef.current.readyState !== WebSocket.OPEN) connectKraken();
+    // Ensure CEX WebSocket connections are alive — skip if already OPEN or CONNECTING
+    // Bug fix: checking only for OPEN caused a new connection to be created while one was
+    // still in CONNECTING state (readyState=0), producing the repeated "OKX WS connected" logs.
+    const wsAlive = (ws: WebSocket | null) =>
+      ws !== null && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING);
+    if (!wsAlive(wsOKXRef.current)) connectOKX();
+    if (!wsAlive(wsBybitRef.current)) connectBybit();
+    if (!wsAlive(wsKrakenRef.current)) connectKraken();
 
     const okx = getExPrices('okx'), bybit = getExPrices('bybit'), kraken = getExPrices('kraken');
     const tri = calcTri(), cross = calcCross(okx, bybit, kraken);
@@ -959,7 +983,10 @@ export function useArbScanner() {
   useEffect(() => { stateRef.current = state; }, [state]);
 
   // ═══ SCHEDULING ═══
-  // Restart DEX timers when dexInterval changes
+  // schedCexRef always holds the latest schedCex — fixes the stale-closure bug where
+  // setTimeout fires the old version of schedCex captured at creation time, breaking
+  // auto-refresh whenever runCexScan is recreated due to dependency changes.
+  const schedCexRef = useRef<() => void>(() => {});
   useEffect(() => {
     if (!dexTimerRef.current && !bscTimerRef.current) return; // Not yet booted
     if (dexTimerRef.current) clearInterval(dexTimerRef.current);
@@ -982,8 +1009,12 @@ export function useArbScanner() {
       setState(prev => ({ ...prev, countdownPct: pct, countdownSec: rem }));
       if (pct >= 100 && cdTimerRef.current) clearInterval(cdTimerRef.current);
     }, 500);
-    scanTimerRef.current = setTimeout(() => { runCexScan().then(schedCex); }, iv);
+    // Use ref to always call the latest schedCex — avoids stale closure when
+    // runCexScan is recreated, which previously broke the auto-refresh chain.
+    scanTimerRef.current = setTimeout(() => { runCexScan().then(() => schedCexRef.current()); }, iv);
   }, [runCexScan]);
+  // Keep ref in sync whenever schedCex is recreated
+  useEffect(() => { schedCexRef.current = schedCex; }, [schedCex]);
 
   // ═══ HISTORY / LOG ═══
   const logOpp = useCallback((opp: DexOpp | CexOpp) => {
@@ -1032,7 +1063,7 @@ export function useArbScanner() {
       const next = !prev.running;
       if (next) {
         addLog('Resumed', 'ok');
-        setTimeout(() => { runCexScan().then(schedCex); scanDex(); setTimeout(() => scanBsc(), 3000); }, 100);
+        setTimeout(() => { runCexScan().then(() => schedCexRef.current()); scanDex(); setTimeout(() => scanBsc(), 3000); }, 100);
       } else {
         addLog('Paused', 'warn');
         if (scanTimerRef.current) clearTimeout(scanTimerRef.current);
@@ -1040,7 +1071,7 @@ export function useArbScanner() {
       }
       return { ...prev, running: next };
     });
-  }, [addLog, runCexScan, schedCex, scanDex]);
+  }, [addLog, runCexScan, scanDex]);
 
   const toggleSound = useCallback(() => {
     setState(prev => {
@@ -1064,11 +1095,11 @@ export function useArbScanner() {
     addLog('ArbPulse Pro v9.0 — Solana + BSC DEX · CEX multi-exchange scanner', 'ok');
     addLog('Chains: Solana · BNB Smart Chain · Safety: RugCheck.xyz · CEX: 4x WS', 'info');
 
-    // Connect all WS
+    // Connect all WS — done ONCE here, never re-created inside runCexScan
     Promise.all([connectOKX(), connectBybit(), connectKraken()]).then(() => addLog('All exchange WS connected', 'ok'));
 
     // Initial scans
-    runCexScan().then(schedCex);
+    runCexScan().then(() => schedCexRef.current());
     scanDex();
     // Stagger BSC scan by 3s to avoid API rate limits
     setTimeout(() => scanBsc(), 3000);
@@ -1081,7 +1112,7 @@ export function useArbScanner() {
     // BSC DEX auto-scan — staggered by 10s relative to Solana timer
     bscTimerRef.current = setInterval(() => {
       if (runningRef.current) scanBsc();
-    }, Math.max(30000, ((filtersRef.current.dexInterval || 20) + 10) * 1000)); // +10s stagger from Solana timer
+    }, Math.max(30000, ((filtersRef.current.dexInterval || 20) + 10) * 1000));
 
     // Request push notification permission
     if ('Notification' in window && Notification.permission === 'default') {
@@ -1109,7 +1140,7 @@ export function useArbScanner() {
   return {
     state, filters, setFilters,
     toggleScanner, toggleSound, clearLogs, clearCexResults,
-    runCexScan: () => runCexScan().then(schedCex),
+    runCexScan: () => runCexScan().then(() => schedCexRef.current()),
     scanDex, scanBsc, logOpp, clearHistory, exportCSV,
     setActiveView, refilterDex, clearNewPairs,
   };
