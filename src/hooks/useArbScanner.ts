@@ -791,55 +791,63 @@ export function useArbScanner() {
 
   // ═══ BSC TRENDING ═══
   const getBscTrending = useCallback(async (): Promise<string[]> => {
-    // Strategy: find tokens confirmed on 2+ BSC DEXes.
-    // `/latest/dex/pairs/bsc/{dexName}` does NOT exist in DexScreener API.
-    // Correct endpoints:
-    //   - /token-pairs/v1/bsc/{tokenAddress}  → all pairs for a token on BSC
-    //   - /latest/dex/tokens/{addresses}       → pairs for multiple tokens
-    //   - /latest/dex/search?q={query}         → search
-
     const seen = new Set<string>();
     const all: string[] = [];
     const add = (addr: string) => { if (addr && !seen.has(addr)) { seen.add(addr); all.push(addr); } };
 
-    // 1. KNOWN multi-DEX tokens — always first, never cut by slice
+    // 1. KNOWN multi-DEX tokens — always first
     BSC_KNOWN_MULTI_DEX.forEach(add);
 
-    // 2. Discover more via search queries targeting liquid BSC pairs
-    //    These searches yield tokens that appear across multiple DEXes
+    // 2. Discover NEW and TRENDING BSC tokens from multiple DexScreener endpoints
     const searches = await Promise.allSettled([
+      // Token boosts — BSC tokens getting promoted (includes new launches)
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/token-boosts/top/v1',
+        'bsc-boosts',
+        (t: any) => t.chainId === 'bsc' && t.tokenAddress
+      ),
+      // Token profiles — recently created BSC token profiles
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/token-profiles/latest/v1',
+        'bsc-profiles',
+        (t: any) => t.chainId === 'bsc' && t.tokenAddress
+      ),
+      // Search for new BSC pairs — broad search with LOW liquidity threshold to catch new tokens
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=bnb+new',
+        'bsc-new',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 500
+      ),
+      // Search for trending meme/new tokens on BSC
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=pancakeswap+bsc',
+        'bsc-pcs',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 1000
+      ),
+      // Established liquid pairs for arb detection
       fetchDSEndpoint(
         'https://api.dexscreener.com/latest/dex/search?q=WBNB',
         'bsc-wbnb',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && t.liquidity?.usd > 50000
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 5000
       ),
       fetchDSEndpoint(
         'https://api.dexscreener.com/latest/dex/search?q=CAKE+BNB',
         'bsc-cake',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && t.liquidity?.usd > 20000
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 5000
       ),
+      // Search specifically for recently created BSC pairs
       fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=ETH+BNB',
-        'bsc-eth',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && t.liquidity?.usd > 50000
-      ),
-      fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=USDT+BNB',
-        'bsc-usdt',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && t.liquidity?.usd > 50000
-      ),
-      fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=BTC+BNB',
-        'bsc-btc',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && t.liquidity?.usd > 50000
+        'https://api.dexscreener.com/latest/dex/search?q=bsc',
+        'bsc-generic',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 200
       ),
     ]);
     searches.forEach(res => {
       if (res.status === 'fulfilled') res.value.forEach((a: string) => add(a));
     });
 
-    addLog(`BSC trending: ${all.length} unique tokens queued`, 'info');
-    return all.slice(0, 60); // 2 batches × 30
+    addLog(`BSC trending: ${all.length} unique tokens queued (incl. new/boosted)`, 'info');
+    return all.slice(0, 60);
   }, [fetchDSEndpoint, addLog]);
 
   // ═══ SCAN BSC ═══
