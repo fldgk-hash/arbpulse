@@ -309,7 +309,7 @@ export function useArbScanner() {
 
   const [filters, setFilters] = useState<ScannerFilters>({
     minSpread: 0.04, minProfit: 0.5, tradeSize: 1000,
-    alertThreshold: 0.5, showTri: true, showCross: true, autoRefresh: false,
+    alertThreshold: 0.5, showTri: true, showCross: true, autoRefresh: true,
     dexMinLiq: 1000, dexMinVol: 200, dexMinSpread: 0.1,
     dexSafeOnly: true, dexNewOnly: false, dexSort: 'spread',
     dexChain: 'solana',
