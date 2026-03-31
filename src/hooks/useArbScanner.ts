@@ -573,7 +573,10 @@ export function useArbScanner() {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
       const items = Array.isArray(d) ? d : (d.pairs || d.tokens || []);
-      const addrs = items.filter(filterFn).map((t: any) => t.tokenAddress || t.baseToken?.address).filter(Boolean);
+      const addrs = items
+        .filter(filterFn)
+        .map((t: any) => t.tokenAddress || t.baseToken?.address)
+        .filter((addr: unknown): addr is string => typeof addr === 'string' && addr.length > 0);
       addLog(`DS ${label}: ${addrs.length} tokens`, 'info');
       return addrs;
     } catch (e: any) { addLog(`DS ${label} failed: ${e.message}`, 'warn'); return []; }
