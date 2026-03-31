@@ -24,10 +24,10 @@ const Index = () => {
   const view = state.activeView;
 
   const DESKTOP_TABS = [
-    { id: 'dex',       label: '🚀 DEX',       count: state.filteredDexOpps.length + state.filteredBscOpps.length },
-    { id: 'new',       label: '🆕 NEW',        count: state.newPairCount },
-    { id: 'cex',       label: '📊 CEX',       count: state.cexOpps.length },
-    { id: 'analytics', label: '💰 Analytics', count: state.history.length },
+    { id: 'dex',       label: 'π€ DEX',       count: state.filteredDexOpps.length + state.filteredBscOpps.length },
+    { id: 'new',       label: 'π†• NEW',        count: state.newPairCount },
+    { id: 'cex',       label: 'π“ CEX',       count: state.cexOpps.length },
+    { id: 'analytics', label: 'π’° Analytics', count: state.history.length },
   ];
 
   const renderMainView = () => {
@@ -110,7 +110,7 @@ const Index = () => {
         {view === 'log' ? (
           <LogPanel state={state} onClearLogs={clearLogs} />
         ) : view === 'settings' ? (
-          // BUG FIX: Log was completely unreachable on mobile — no BottomNav tab ever
+          // BUG FIX: Log was completely unreachable on mobile β€” no BottomNav tab ever
           // routed to 'log'. Fix: show LogPanel + Sidebar together under "More" tab.
           <div className="flex-1 overflow-y-auto bg-arb-bg2 flex flex-col">
             <LogPanel state={state} onClearLogs={clearLogs} />
