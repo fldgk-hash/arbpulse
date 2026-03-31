@@ -26,7 +26,7 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
       if (chainFilter !== 'all' && p.chain !== chainFilter) return false;
       if (arbOnly && !p.hasMultiDex) return false;
       if (minLiq > 0 && p.liq < minLiq) return false;
-      const age = p.createdAt !== null ? now - p.createdAt : Infinity; // Infinity → only shows in 'all'
+      const age = p.createdAt !== null ? now - p.createdAt : Infinity; // Infinity β†’ only shows in 'all'
       if (age > AGE_MS[ageFilter]) return false;
       return true;
     });
@@ -41,16 +41,16 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
       {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
         <div className="font-sans font-semibold text-[13px] text-arb-head flex items-center gap-2">
-          🆕 New Listings
+          π†• New Listings
           <span className="text-[10px] text-arb-muted">{filtered.length} pairs</span>
           {arbCount > 0 && (
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-arb-green/10 border border-arb-green/30 text-arb-green font-bold">
-              ⚡ {arbCount} ARB
+              β΅ {arbCount} ARB
             </span>
           )}
           {freshCount > 0 && (
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-arb-red/10 border border-arb-red/30 text-arb-red font-bold animate-pulse">
-              🔴 {freshCount} &lt;1h
+              π”΄ {freshCount} &lt;1h
             </span>
           )}
         </div>
@@ -81,7 +81,7 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
           {(['all','solana','bsc'] as ChainFilter[]).map(c => (
             <button key={c} onClick={() => setChainFilter(c)}
               className={`px-2 py-0.5 font-mono text-[9px] rounded border cursor-pointer transition-colors ${chainFilter === c ? 'bg-arb-green/10 border-arb-green/40 text-arb-green' : 'bg-transparent border-arb-border2 text-arb-muted hover:text-arb-text'}`}>
-              {c === 'all' ? 'ALL' : c === 'solana' ? '◎ SOL' : '🟡 BSC'}
+              {c === 'all' ? 'ALL' : c === 'solana' ? 'β— SOL' : 'π΅ BSC'}
             </button>
           ))}
         </div>
@@ -94,7 +94,7 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
           <div className={`w-[26px] h-[13px] rounded-full relative transition-colors ${arbOnly ? 'bg-arb-green' : 'bg-arb-border2'}`}>
             <div className={`absolute w-[9px] h-[9px] bg-white rounded-full top-[2px] transition-all ${arbOnly ? 'left-[15px]' : 'left-[2px]'}`} />
           </div>
-          <span>⚡ Arb only</span>
+          <span>β΅ Arb only</span>
         </label>
 
         <div className="w-px h-4 bg-arb-border2" />
@@ -121,8 +121,8 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
       {/* Empty state */}
       {filtered.length === 0 ? (
         <div className="text-center py-10 text-arb-muted text-[11px] leading-relaxed">
-          🔍 No new pairs yet.<br /><br />
-          <span className="text-arb-amber text-[10px]">New listings appear here as scans run.<br />Pairs with ⚡ ARB badge have been spotted on 2+ DEXes.</span>
+          π” No new pairs yet.<br /><br />
+          <span className="text-arb-amber text-[10px]">New listings appear here as scans run.<br />Pairs with β΅ ARB badge have been spotted on 2+ DEXes.</span>
         </div>
       ) : (
         <div className="flex flex-col gap-1.5">
@@ -135,16 +135,16 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
   );
 });
 
-/* ─── Card ──────────────────────────────────────────────────────────────────── */
+/* β”€β”€β”€ Card β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€ */
 function NewPairCard({ pair: p }: { pair: NewPairEntry }) {
   const [copied, setCopied] = useState(false);
   const now = Date.now();
-  // FIX: ageMs must use createdAt ONLY — seenAt is "when WE scanned it", not "when it was created".
-  // Using seenAt as fallback made years-old pairs show as 🔴 NEW (seenAt ≈ now → ageMs ≈ 0).
-  // If createdAt is null → age is unknown → treat as old (Infinity) → no fresh badge.
+  // FIX: ageMs must use createdAt ONLY β€” seenAt is "when WE scanned it", not "when it was created".
+  // Using seenAt as fallback made years-old pairs show as π”΄ NEW (seenAt β‰ now β†’ ageMs β‰ 0).
+  // If createdAt is null β†’ age is unknown β†’ treat as old (Infinity) β†’ no fresh badge.
   const ageMs = p.createdAt !== null ? now - p.createdAt : Infinity;
   const isFresh = ageMs < 3600000;      // < 1h on-chain age
-  const isVFresh = ageMs < 1800000;     // < 30min — pulse animation
+  const isVFresh = ageMs < 1800000;     // < 30min β€” pulse animation
   const isBsc = p.chain === 'bsc';
 
   const dsUrl = isBsc
@@ -165,7 +165,7 @@ function NewPairCard({ pair: p }: { pair: NewPairEntry }) {
   const rawDex = p.dex.startsWith('unknown:') ? p.dex.slice(8) : p.dex; // strip our "unknown:" flag
   const isContractAddr = /^0x[0-9a-fA-F]{8,}/.test(rawDex);
   const dexLabel = isContractAddr
-    ? rawDex.slice(0, 6) + '…' + rawDex.slice(-4) // show short addr, not full 42 chars
+    ? rawDex.slice(0, 6) + 'β€¦' + rawDex.slice(-4) // show short addr, not full 42 chars
     : ((isBsc ? bscNames : solNames)[rawDex] || rawDex);
 
   return (
@@ -184,7 +184,7 @@ function NewPairCard({ pair: p }: { pair: NewPairEntry }) {
               ? 'bg-arb-amber/10 border-arb-amber/30 text-arb-amber'
               : 'bg-arb-green/10 border-arb-green/30 text-arb-green'
           }`}>
-            {isBsc ? '🟡 BSC' : '◎ SOL'}
+            {isBsc ? 'π΅ BSC' : 'β— SOL'}
           </span>
 
           {/* Symbol */}
@@ -194,7 +194,7 @@ function NewPairCard({ pair: p }: { pair: NewPairEntry }) {
           {/* Arb badge */}
           {p.hasMultiDex && (
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-arb-green/10 border border-arb-green/30 text-arb-green font-bold whitespace-nowrap">
-              ⚡ ARB {p.arbSpread ? p.arbSpread.toFixed(2) + '%' : ''}
+              β΅ ARB {p.arbSpread ? p.arbSpread.toFixed(2) + '%' : ''}
             </span>
           )}
 
@@ -205,7 +205,7 @@ function NewPairCard({ pair: p }: { pair: NewPairEntry }) {
                 ? 'bg-arb-red/10 border-arb-red/30 text-arb-red'
                 : 'bg-arb-amber/10 border-arb-amber/30 text-arb-amber'
             }`}>
-              {isVFresh ? '🔴 NEW' : '🟡 <1h'}
+              {isVFresh ? 'π”΄ NEW' : 'π΅ <1h'}
             </span>
           )}
         </div>
@@ -228,22 +228,22 @@ function NewPairCard({ pair: p }: { pair: NewPairEntry }) {
       <div className="flex items-center gap-1.5 flex-wrap">
         <button onClick={copyMint}
           className="text-[8px] font-mono text-arb-blue hover:text-arb-cyan transition-colors cursor-pointer border border-arb-border2 bg-arb-bg3 px-1.5 py-0.5 rounded">
-          {copied ? '✓ copied' : (isBsc ? p.mint.slice(0, 6) + '…' + p.mint.slice(-4) : p.mint.slice(0, 6) + '…' + p.mint.slice(-4))}
+          {copied ? 'β“ copied' : (isBsc ? p.mint.slice(0, 6) + 'β€¦' + p.mint.slice(-4) : p.mint.slice(0, 6) + 'β€¦' + p.mint.slice(-4))}
         </button>
         <a href={dsUrl} target="_blank" rel="noopener noreferrer"
           className="text-[8px] font-mono text-arb-purple hover:text-arb-purple/80 border border-arb-border2 bg-arb-bg3 px-1.5 py-0.5 rounded transition-colors no-underline">
-          📊 DS
+          π“ DS
         </a>
         <a href={explorerUrl} target="_blank" rel="noopener noreferrer"
           className="text-[8px] font-mono text-arb-muted hover:text-arb-blue border border-arb-border2 bg-arb-bg3 px-1.5 py-0.5 rounded transition-colors no-underline">
-          🔍 {isBsc ? 'BSCscan' : 'Solscan'}
+          π” {isBsc ? 'BSCscan' : 'Solscan'}
         </a>
       </div>
     </div>
   );
 }
 
-/* ─── Mini stat ─────────────────────────────────────────────────────────────── */
+/* β”€β”€β”€ Mini stat β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€β”€ */
 function MiniStat({ label, value, cls = 'text-arb-head' }: { label: string; value: string; cls?: string }) {
   return (
     <div className="bg-arb-bg3 rounded p-1 px-1.5">
