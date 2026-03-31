@@ -1142,18 +1142,16 @@ export function useArbScanner() {
     // Connect all WS — done ONCE here, never re-created inside runCexScan
     Promise.all([connectOKX(), connectBybit(), connectKraken()]).then(() => addLog('All exchange WS connected', 'ok'));
 
-    // Initial scans
-    runCexScan().then(() => schedCexRef.current());
-    scanDex();
-    // Stagger BSC scan by 3s to avoid API rate limits
-    setTimeout(() => scanBsc(), 3000);
+    if (filtersRef.current.autoRefresh) {
+      runCexScan().then(() => schedCexRef.current());
+      scanDex();
+      setTimeout(() => scanBsc(), 3000);
+    }
 
-    // Solana DEX auto-scan — respects dexInterval filter (default 20s)
     dexTimerRef.current = setInterval(() => {
       if (runningRef.current) scanDex();
     }, (filtersRef.current.dexInterval || 20) * 1000);
 
-    // BSC DEX auto-scan — staggered by 10s relative to Solana timer
     bscTimerRef.current = setInterval(() => {
       if (runningRef.current) scanBsc();
     }, Math.max(30000, ((filtersRef.current.dexInterval || 20) + 10) * 1000));
