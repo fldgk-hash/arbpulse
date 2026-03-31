@@ -1,6 +1,6 @@
 import { memo, useCallback, useState } from 'react';
 import type { DexOpp, ScannerFilters, SafetyResult } from '@/hooks/useArbScanner';
-import { fmtPrice, fmtVol, fmtAge, LOW_LIQ_THRESHOLD, BSC_LOW_LIQ_THRESHOLD } from '@/hooks/useArbScanner';
+import { fmtPrice, fmtVol, fmtAge, LOW_LIQ_THRESHOLD } from '@/hooks/useArbScanner';
 
 interface DexViewProps {
   // Solana
@@ -192,12 +192,12 @@ function DyorBanner() {
 }
 
 /* ─── DexCard ───────────────────────────────────────────────────────────────── */
-function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number; onLog: (o: DexOpp) => void; onCalc: (o: DexOpp) => void }) {  const sc = o.spreadPct > 2 ? 'text-arb-green' : o.spreadPct > 0.5 ? 'text-arb-amber' : 'text-arb-muted';
+function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number; onLog: (o: DexOpp) => void; onCalc: (o: DexOpp) => void }) {
+  const sc = o.spreadPct > 2 ? 'text-arb-green' : o.spreadPct > 0.5 ? 'text-arb-amber' : 'text-arb-muted';
   const accentClass = o.hot ? 'bg-gradient-to-b from-arb-red to-arb-amber' : o.safety ? (o.safety.score < 300 ? 'bg-arb-green' : o.safety.score < 600 ? 'bg-arb-amber' : 'bg-arb-red') : 'bg-arb-amber';
   const borderClass = o.hot ? 'border-arb-red/30' : o.isNew ? 'border-arb-cyan/30' : o.lowLiquidity ? 'border-arb-amber/40' : 'border-arb-border';
   const minTvl = Math.min(o.buyTvl || o.buyLiq, o.sellTvl || o.sellLiq);
   const isBsc = o.chain === 'bsc';
-  const liqThreshold = isBsc ? BSC_LOW_LIQ_THRESHOLD : LOW_LIQ_THRESHOLD;
   const explorerBase = isBsc ? 'https://bscscan.com/token/' : 'https://solscan.io/token/';
   const dsPath = isBsc ? `https://dexscreener.com/bsc/${o.buyPairAddr || o.mint}` : `https://dexscreener.com/solana/${o.buyPairAddr || o.mint}`;
 
@@ -215,7 +215,7 @@ function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number;
         <div className="flex items-center gap-1.5 bg-arb-amber/[0.08] border border-arb-amber/25 rounded px-2 py-1 mb-2">
           <span className="text-arb-amber text-[12px]">⚠</span>
           <span className="text-[9px] text-arb-amber font-semibold">Low Liquidity Pair</span>
-          <span className="text-[9px] text-arb-muted">— TVL below ${(liqThreshold / 1000).toFixed(0)}K · High price impact risk</span>
+          <span className="text-[9px] text-arb-muted">— TVL below ${(LOW_LIQ_THRESHOLD / 1000).toFixed(0)}K · High price impact risk</span>
         </div>
       )}
 
@@ -255,10 +255,10 @@ function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number;
         <StatBox label="Net Profit" value={`$${o.net.toFixed(2)}`} cls="text-arb-green" />
         <StatBox label="Min Liq" value={fmtVol(o.minLiq)} cls="text-arb-head" />
         <StatBox
-          label="TVL"
-          value={fmtVol(minTvl)}
-          cls={minTvl < liqThreshold ? 'text-arb-amber' : 'text-arb-head'}
-          icon={minTvl < liqThreshold ? '⚠' : undefined}
+          label="Vol/MC"
+          value={`${o.volMCRatio.toFixed(1)}×`}
+          cls={o.volMCRatio >= 4.5 ? 'text-arb-green' : o.volMCRatio >= 2 ? 'text-arb-amber' : 'text-arb-muted'}
+          icon={o.volMCRatio >= 4.5 ? '🔥' : undefined}
         />
         <StatBox label="Age" value={fmtAge(o.createdAt)} cls={o.isNew ? 'text-arb-amber' : 'text-arb-muted'} />
       </div>

@@ -82,6 +82,38 @@ export const Sidebar = memo(({ state, filters, setFilters, onManualScan, onClear
 
       <Divider />
 
+      {/* DEX Early Pump Filters */}
+      <Section title="DEX Pump Filters">
+        {/* Vol/MC Ratio slider */}
+        <div className="bg-arb-bg3 border border-arb-border rounded p-2.5 mb-2">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] text-arb-text">🔥 Vol/MC min</span>
+            <span className={`text-[11px] font-semibold tabular-nums ${(filters as any).minVolumeMCRatio > 0 ? 'text-arb-green' : 'text-arb-muted'}`}>
+              {(filters as any).minVolumeMCRatio === 0 ? 'OFF' : `${((filters as any).minVolumeMCRatio).toFixed(1)}×`}
+            </span>
+          </div>
+          <input type="range" min={0} max={10} step={0.5} value={(filters as any).minVolumeMCRatio || 0}
+            onChange={e => updateFilter('minVolumeMCRatio' as any, parseFloat(e.target.value))}
+            className="w-full h-[3px] rounded bg-arb-border2 appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-arb-amber [&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-arb-bg2 [&::-webkit-slider-thumb]:cursor-pointer" />
+          <div className="flex justify-between text-[8px] text-arb-muted mt-0.5">
+            <span>OFF</span><span>2.5×</span><span>5×</span><span>7.5×</span><span>10×</span>
+          </div>
+          <div className="text-[8px] text-arb-muted mt-1 leading-relaxed">
+            vol24h ÷ (liq × 2.2) · 4.5× = aggressive pump · 0 = disabled
+          </div>
+        </div>
+        <FilterInput label="Min Liq $" value={filters.dexMinLiq} step={1000} min={0}
+          onChange={v => updateFilter('dexMinLiq', v)} />
+        <FilterInput label="Min Vol 24h $" value={filters.dexMinVol} step={1000} min={0}
+          onChange={v => updateFilter('dexMinVol', v)} />
+        <FilterInput label="Min DEX Spread %" value={filters.dexMinSpread} step={0.005} min={0}
+          onChange={v => updateFilter('dexMinSpread', v)} />
+        <ToggleRow label="New only (<5h)" value={filters.dexNewOnly} onChange={v => updateFilter('dexNewOnly', v)} />
+        <ToggleRow label="Safe only" value={filters.dexSafeOnly} onChange={v => updateFilter('dexSafeOnly', v)} />
+      </Section>
+
+      <Divider />
+
       {/* Exchange Fees */}
       <Section title="Exchange Fees">
         <div className="grid grid-cols-2 gap-1.5">
@@ -91,23 +123,6 @@ export const Sidebar = memo(({ state, filters, setFilters, onManualScan, onClear
               <div className="text-[11px] text-arb-text mt-0.5">{(ex.fee * 100).toFixed(2)}% taker</div>
             </div>
           ))}
-        </div>
-      </Section>
-
-      <Divider />
-
-      {/* Safety providers */}
-      <Section title="Safety Providers">
-        <div className="bg-arb-bg3 border border-arb-border rounded p-2.5 text-[9px] leading-relaxed">
-          <div className="flex items-center gap-1.5 mb-1">
-            <span className="text-arb-green font-bold">◎ Solana</span>
-            <span className="text-arb-muted">RugCheck.xyz</span>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-arb-amber font-bold">🟡 BSC</span>
-            <span className="text-arb-muted">GoPlus Security API</span>
-          </div>
-          <div className="text-arb-muted mt-1.5 text-[8px]">Scores update in background after each scan.</div>
         </div>
       </Section>
 

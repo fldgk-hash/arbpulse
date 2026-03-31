@@ -148,6 +148,7 @@ export interface DexOpp {
   buyTvl: number; sellTvl: number;
   buyPairAddr: string; sellPairAddr: string;
   vol24h: number; createdAt: number | null;
+  volMCRatio: number;          // vol24h / (minLiq * 2.2) — momentum signal
   isNew: boolean; isVNew: boolean; hot: boolean;
   lowLiquidity: boolean;
   safety: SafetyResult | null;
@@ -212,6 +213,7 @@ export interface ScannerFilters {
   dexSafeOnly: boolean; dexNewOnly: boolean; dexSort: string;
   dexChain: 'solana' | 'bsc';
   cexInterval: number; dexInterval: number;
+  minVolumeMCRatio: number;    // 0 = off | e.g. 4.5 = aggressive momentum filter
 }
 
 export interface NewPairEntry {
@@ -321,17 +323,18 @@ export function useArbScanner() {
   });
 
   const [filters, setFilters] = useState<ScannerFilters>({
-    minSpread: 0.024, minProfit: 18, tradeSize: 800,
-    alertThreshold: 0.4, showTri: true, showCross: true, autoRefresh: true,
+    minSpread: 0.028, minProfit: 20, tradeSize: 800,
+    alertThreshold: 0.45, showTri: true, showCross: true, autoRefresh: true,
     // Early Pump Detector defaults — optimised for Raydium-migrated tokens
     dexMinLiq: 14000,       // $14k+ — catches early pools before they're crowded
-    dexMinVol: 28000,       // $45k+ 24h vol — real activity, not ghost pools
-    dexMinSpread: 0.024,    // 2.8%+ net spread after fees
+    dexMinVol: 45000,       // $45k+ 24h vol — real activity, not ghost pools
+    dexMinSpread: 0.028,    // 2.8%+ net spread after fees
     dexSafeOnly: false,     // Off — early pumps often have intermediate RugCheck scores
     dexNewOnly: true,       // ON — only tokens < MAX_PAIR_AGE_HOURS old
     dexSort: 'profit',
     dexChain: 'solana',
-    cexInterval: 25, dexInterval: 15, // 16s DEX refresh for faster early detection
+    cexInterval: 25, dexInterval: 16, // 16s DEX refresh for faster early detection
+    minVolumeMCRatio: 0,         // 0 = off by default — enable in sidebar (e.g. 4.5 for aggressive)
   });
 
   const pricesRef = useRef<Record<string, PriceData>>({});
@@ -835,6 +838,8 @@ export function useArbScanner() {
           const age = buy.createdAt && sell.createdAt ? Math.min(buy.createdAt, sell.createdAt) : (buy.createdAt || sell.createdAt || null);
           const minLiqVal = Math.min(buy.liq, sell.liq);
           const liqThreshold = chain === 'bsc' ? BSC_LOW_LIQ_THRESHOLD : LOW_LIQ_THRESHOLD;
+          const mcApprox = minLiqVal > 0 ? minLiqVal * 2.2 : 1;
+          const volMCRatio = Math.max(buy.vol, sell.vol) / mcApprox;
           results.push({
             id: `${chain}-${token.mint}-${buy.dex}-${sell.dex}`,
             chain,
@@ -846,6 +851,7 @@ export function useArbScanner() {
             buyTvl: buy.tvl || buy.liq, sellTvl: sell.tvl || sell.liq,
             buyPairAddr: buy.pairAddr || '', sellPairAddr: sell.pairAddr || '',
             vol24h: Math.max(buy.vol, sell.vol),
+            volMCRatio,
             createdAt: age, isNew: isNew(age), isVNew: isVNew(age),
             hot: sp > 1.5,
             lowLiquidity: minLiqVal < liqThreshold,
@@ -887,11 +893,13 @@ export function useArbScanner() {
       if (o.vol24h < f.dexMinVol) return false;
       if (o.spreadPct < f.dexMinSpread) return false;
       if (f.dexSafeOnly && o.safety && o.safety.score >= 600) return false;
-      // Early pump age gate — key for catching Raydium migrations within first hours
+      // Early pump age gate
       if (f.dexNewOnly && o.createdAt) {
         const ageHours = (Date.now() - o.createdAt) / 3600000;
         if (ageHours > MAX_PAIR_AGE_HOURS) return false;
       }
+      // Vol/MC momentum gate — 0 = disabled
+      if (f.minVolumeMCRatio > 0 && o.volMCRatio < f.minVolumeMCRatio) return false;
       return true;
     });
     filtered.sort((a, b) => {
