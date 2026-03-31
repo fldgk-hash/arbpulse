@@ -1182,8 +1182,14 @@ export function useArbScanner() {
   return {
     state, filters, setFilters,
     toggleScanner, toggleSound, clearLogs, clearCexResults,
-    runCexScan: () => runCexScan().then(() => schedCexRef.current()),
-    scanDex, scanBsc, logOpp, clearHistory, exportCSV,
-    setActiveView, refilterDex, clearNewPairs,
+    runCexScan: () => runCexScan(),
+    scanDex,
+    scanBsc,
+    logOpp,
+    clearHistory,
+    exportCSV,
+    setActiveView,
+    refilterDex,
+    clearNewPairs,
   };
 }
