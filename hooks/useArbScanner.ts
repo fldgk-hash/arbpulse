@@ -466,7 +466,7 @@ export function useArbScanner() {
         addLog(`Binance WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
         setTimeout(() => { if (runningRef.current) connectWS(); }, delay);
       };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 18000);
     });
   }, [addLog, setExStatus]);
 
@@ -503,7 +503,7 @@ export function useArbScanner() {
         addLog(`OKX WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
         setTimeout(() => { if (runningRef.current) connectOKX(); }, delay);
       };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 18000);
     });
   }, [addLog, setExStatus]);
 
@@ -539,7 +539,7 @@ export function useArbScanner() {
         addLog(`Bybit WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
         setTimeout(() => { if (runningRef.current) connectBybit(); }, delay);
       };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 18000);
     });
   }, [addLog, setExStatus]);
 
@@ -580,7 +580,7 @@ export function useArbScanner() {
         addLog(`Kraken WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
         setTimeout(() => { if (runningRef.current) connectKraken(); }, delay);
       };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 18000);
     });
   }, [addLog, setExStatus]);
 
@@ -1249,7 +1249,7 @@ export function useArbScanner() {
     runCexScan().then(() => schedCexRef.current());
     scanDex();
     // Stagger BSC scan by 3s to avoid API rate limits
-    setTimeout(() => scanBsc(), 3000);
+    setTimeout(() => scanBsc(), 6000);
 
     // Solana DEX auto-scan — respects dexInterval filter (default 20s)
     dexTimerRef.current = setInterval(() => {
