@@ -680,7 +680,7 @@ export function useArbScanner() {
         // Limit Set size to avoid memory growth (cap at 5000 pairs)
         if (knownPairs.current.size > 5000) {
           const first = knownPairs.current.values().next().value;
-          knownPairs.current.delete(first);
+          if (first !== undefined) knownPairs.current.delete(first);
         }
       }
       // Show as "new" based on pair creation time, not our first-sight time
@@ -712,7 +712,6 @@ export function useArbScanner() {
           // Prepend — newest first
           newPairsRef.current = [entry, ...newPairsRef.current].slice(0, 200);
         }
-      }
     });
     if (newFound > 0) {
       if (soundOnRef.current) beep(1100, 0.08);
