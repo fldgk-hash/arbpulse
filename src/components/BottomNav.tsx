@@ -4,15 +4,15 @@ interface BottomNavProps {
   activeView: string;
   onSwitch: (view: string) => void;
   newPairCount: number;
-  errorLogCount?: number; // count of err/warn log entries β€” badge on More tab
+  errorLogCount?: number; // count of err/warn log entries — badge on More tab
 }
 
 const VIEWS = [
-  { id: 'dex',       icon: 'π€', label: 'DEX' },
-  { id: 'new',       icon: 'π†•', label: 'NEW' },
-  { id: 'cex',       icon: 'π“', label: 'CEX' },
-  { id: 'analytics', icon: 'π’°', label: 'TRACK' },
-  { id: 'settings',  icon: 'β™οΈ', label: 'MORE' },
+  { id: 'dex',       icon: '🚀', label: 'DEX' },
+  { id: 'new',       icon: '🆕', label: 'NEW' },
+  { id: 'cex',       icon: '📊', label: 'CEX' },
+  { id: 'analytics', icon: '💰', label: 'TRACK' },
+  { id: 'settings',  icon: '⚙️', label: 'MORE' },
 ]; // MORE tab = Log Panel + Settings (both visible on scroll)
 
 export const BottomNav = memo(({ activeView, onSwitch, newPairCount, errorLogCount = 0 }: BottomNavProps) => (

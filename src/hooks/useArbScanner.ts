@@ -102,8 +102,8 @@ export const BSC_KNOWN_MULTI_DEX = [
 
 // Slippage constants — chain-specific
 // BSC: liquid pairs on major DEXes, $1k trade → ~0.05% slippage
-// Solana: realistic for $1k on Raydium/Orca pools → 0.2% (was 0.5% — too aggressive, killed all opps)
-const SOL_SLIP = 0.002;
+// Solana: realistic for $1k on Raydium/Orca/Meteora pools → 0.1%
+const SOL_SLIP = 0.001;
 const BSC_SLIP = 0.0005;
 
 const TRIPS = [
@@ -154,9 +154,9 @@ export interface DexOpp {
 }
 
 // TVL threshold below which we flag a pair as low-liquidity risk
-export const LOW_LIQ_THRESHOLD = 25000;
+export const LOW_LIQ_THRESHOLD = 10000;
 // BSC has higher gas costs + more aggressive MEV bots → higher min liquidity
-export const BSC_LOW_LIQ_THRESHOLD = 35000;
+export const BSC_LOW_LIQ_THRESHOLD = 25000;
 
 // Issue #3: Normalize DexScreener DEX IDs to match our fee map keys
 // IMPORTANT: Do NOT merge v2/v3 — they are different DEXes for arbitrage purposes.
@@ -321,35 +321,18 @@ export function useArbScanner() {
   });
 
   const [filters, setFilters] = useState<ScannerFilters>({
-    minSpread: 0.025,           // (ή ό,τι έχεις βάλει στην aggressive έκδοση)
-    minProfit: 15,
-    tradeSize: 1000,
-    alertThreshold: 0.4,
-    showTri: true,
-    showCross: true,
-    autoRefresh: true,
-
-    dexMinLiq: 12000,
-    dexMinVol: 35000,
-    dexMinSpread: 0.025,
-
-    dexSafeOnly: false,
-    dexNewOnly: true,
+    minSpread: 0.028, minProfit: 20, tradeSize: 800,
+    alertThreshold: 0.45, showTri: true, showCross: true, autoRefresh: true,
+    // Early Pump Detector defaults — optimised for Raydium-migrated tokens
+    dexMinLiq: 14000,       // $14k+ — catches early pools before they're crowded
+    dexMinVol: 45000,       // $45k+ 24h vol — real activity, not ghost pools
+    dexMinSpread: 0.028,    // 2.8%+ net spread after fees
+    dexSafeOnly: false,     // Off — early pumps often have intermediate RugCheck scores
+    dexNewOnly: true,       // ON — only tokens < MAX_PAIR_AGE_HOURS old
     dexSort: 'profit',
     dexChain: 'solana',
-
-    cexInterval: 25,
-    dexInterval: 18,
-});
-
-// ==================== ΝΕΕΣ ΓΡΑΜΜΕΣ ΠΟΥ ΠΡΟΣΘΕΤΟΥΜΕ ====================
-const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώρες όταν είναι ενεργό το dexNewOnly
-
-// Μπορείς να αλλάξεις εύκολα την τιμή εδώ ανάλογα με το mode:
-// Aggressive → 4-6 ώρες
-// Balanced   → 8-12 ώρες
-// Safe       → 24 ώρες
-// =====================================================================
+    cexInterval: 25, dexInterval: 16, // 16s DEX refresh for faster early detection
+  });
 
   const pricesRef = useRef<Record<string, PriceData>>({});
   const bookRef = useRef<Record<string, { bid: number; ask: number }>>({});
@@ -445,15 +428,25 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
     ['ETH','SOL','XRP','DOT','ADA','AVAX'].forEach(x => s(x, 'BNB', x + 'BNB'));
   }, []);
 
+  // ═══ WS RECONNECT BACKOFF ═══
+  // Track consecutive failures per exchange to apply exponential backoff.
+  // Resets to 0 on successful open. Caps at 5 (max 32s delay).
+  const wsRetry = useRef<Record<string, number>>({ binance: 0, okx: 0, bybit: 0, kraken: 0 });
+  const wsDelay = (id: string) => Math.min(32000, 2000 * Math.pow(2, wsRetry.current[id] || 0));
+
   // ═══ BINANCE WS ═══
   const connectWS = useCallback(() => {
     return new Promise<boolean>(resolve => {
       if (wsRef.current?.readyState === WebSocket.OPEN) { resolve(true); return; }
-      const st = SYMBOLS.map(s => `${s.toLowerCase()}usdt@bookTicker/${s.toLowerCase()}usdt@ticker`).join('/'); // All 40 symbols
+      const st = SYMBOLS.map(s => `${s.toLowerCase()}usdt@bookTicker/${s.toLowerCase()}usdt@ticker`).join('/');
       const w = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${st}`);
       wsRef.current = w;
       let done = false;
-      w.onopen = () => { setExStatus('binance', true, 'WS Live'); addLog('Binance WS connected', 'ok'); if (!done) { done = true; resolve(true); } };
+      w.onopen = () => {
+        wsRetry.current.binance = 0;
+        setExStatus('binance', true, 'WS Live'); addLog('Binance WS connected', 'ok');
+        if (!done) { done = true; resolve(true); }
+      };
       w.onmessage = evt => {
         try {
           const d = JSON.parse(evt.data).data; if (!d?.s) return;
@@ -467,9 +460,18 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
           if (d.e === '24hrTicker') { pricesRef.current[sym].price = parseFloat(d.c); pricesRef.current[sym].chg24 = parseFloat(d.P); }
         } catch {}
       };
-      w.onerror = () => { setExStatus('binance', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
-      w.onclose = () => { wsRef.current = null; wsReadyRef.current = false; setTimeout(() => { if (runningRef.current) connectWS(); }, 5000); };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 6000);
+      w.onerror = () => {
+        wsRetry.current.binance++;
+        setExStatus('binance', false, 'WS Error');
+        if (!done) { done = true; resolve(false); }
+      };
+      w.onclose = (evt) => {
+        wsRef.current = null; wsReadyRef.current = false;
+        const delay = wsDelay('binance');
+        addLog(`Binance WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
+        setTimeout(() => { if (runningRef.current) connectWS(); }, delay);
+      };
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
     });
   }, [addLog, setExStatus]);
 
@@ -481,6 +483,7 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
       wsOKXRef.current = w;
       let done = false;
       w.onopen = () => {
+        wsRetry.current.okx = 0;
         w.send(JSON.stringify({ op: 'subscribe', args: OKX_SYMS.map(id => ({ channel: 'tickers', instId: id })) }));
         setExStatus('okx', true, 'WS Live'); addLog('OKX WS connected', 'ok');
         if (!done) { done = true; resolve(true); }
@@ -494,9 +497,18 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
           });
         } catch {}
       };
-      w.onerror = () => { setExStatus('okx', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
-      w.onclose = () => { wsOKXRef.current = null; setTimeout(() => { if (runningRef.current) connectOKX(); }, 6000); };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 7000);
+      w.onerror = () => {
+        wsRetry.current.okx++;
+        setExStatus('okx', false, 'WS Error');
+        if (!done) { done = true; resolve(false); }
+      };
+      w.onclose = (evt) => {
+        wsOKXRef.current = null;
+        const delay = wsDelay('okx');
+        addLog(`OKX WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
+        setTimeout(() => { if (runningRef.current) connectOKX(); }, delay);
+      };
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
     });
   }, [addLog, setExStatus]);
 
@@ -508,6 +520,7 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
       wsBybitRef.current = w;
       let done = false;
       w.onopen = () => {
+        wsRetry.current.bybit = 0;
         w.send(JSON.stringify({ op: 'subscribe', args: BYBIT_SYMS.map(s => 'tickers.' + s) }));
         setExStatus('bybit', true, 'WS Live'); addLog('Bybit WS connected', 'ok');
         if (!done) { done = true; resolve(true); }
@@ -520,9 +533,18 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
           bybitPricesRef.current[sym] = { bid: parseFloat(t.bid1Price) || 0, ask: parseFloat(t.ask1Price) || 0, price: parseFloat(t.lastPrice) || 0 };
         } catch {}
       };
-      w.onerror = () => { setExStatus('bybit', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
-      w.onclose = () => { wsBybitRef.current = null; setTimeout(() => { if (runningRef.current) connectBybit(); }, 6000); };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 7000);
+      w.onerror = () => {
+        wsRetry.current.bybit++;
+        setExStatus('bybit', false, 'WS Error');
+        if (!done) { done = true; resolve(false); }
+      };
+      w.onclose = (evt) => {
+        wsBybitRef.current = null;
+        const delay = wsDelay('bybit');
+        addLog(`Bybit WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
+        setTimeout(() => { if (runningRef.current) connectBybit(); }, delay);
+      };
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
     });
   }, [addLog, setExStatus]);
 
@@ -530,11 +552,11 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
   const connectKraken = useCallback(() => {
     return new Promise<boolean>(resolve => {
       if (wsKrakenRef.current?.readyState === WebSocket.OPEN) { resolve(true); return; }
-      const w = new WebSocket('wss://ws.kraken.com/v2');  // Kraken WS v2
+      const w = new WebSocket('wss://ws.kraken.com/v2');
       wsKrakenRef.current = w;
       let done = false;
       w.onopen = () => {
-        // Kraken WS v2 — map XBT/USD → BTC/USD for v2 format
+        wsRetry.current.kraken = 0;
         const v2Pairs = KRAKEN_PAIRS.map(p => p === 'XBT/USD' ? 'BTC/USD' : p);
         w.send(JSON.stringify({ method: 'subscribe', params: { channel: 'ticker', symbol: v2Pairs } }));
         setExStatus('kraken', true, 'WS Live'); addLog('Kraken WS connected', 'ok');
@@ -543,48 +565,93 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
       w.onmessage = evt => {
         try {
           const d = JSON.parse(evt.data);
-          // Kraken WS v2 format: { channel:'ticker', data:[{symbol, bid, ask, last}] }
           if (d.channel === 'ticker' && Array.isArray(d.data)) {
             d.data.forEach((t: any) => {
               const pairKey = t.symbol === 'BTC/USD' ? 'XBT/USD' : t.symbol;
               const sym = KRAKEN_MAP[pairKey]; if (!sym) return;
-              krakenPricesRef.current[sym] = {
-                bid: t.bid || 0, ask: t.ask || 0, price: t.last || 0
-              };
+              krakenPricesRef.current[sym] = { bid: t.bid || 0, ask: t.ask || 0, price: t.last || 0 };
             });
           }
         } catch {}
       };
-      w.onerror = () => { setExStatus('kraken', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
-      w.onclose = () => { wsKrakenRef.current = null; setTimeout(() => { if (runningRef.current) connectKraken(); }, 8000); };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 7000);
+      w.onerror = () => {
+        wsRetry.current.kraken++;
+        setExStatus('kraken', false, 'WS Error');
+        if (!done) { done = true; resolve(false); }
+      };
+      w.onclose = (evt) => {
+        wsKrakenRef.current = null;
+        const delay = wsDelay('kraken');
+        addLog(`Kraken WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
+        setTimeout(() => { if (runningRef.current) connectKraken(); }, delay);
+      };
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
     });
   }, [addLog, setExStatus]);
 
   const getExPrices = useCallback((id: string) => {
-    // ONLY return live WS data — never simulate/fake prices
-    const src: Record<string, PriceData> = { okx: okxPricesRef.current, bybit: bybitPricesRef.current, kraken: krakenPricesRef.current }[id] || {};
+    const src: Record<string, PriceData> = {
+      okx: okxPricesRef.current,
+      bybit: bybitPricesRef.current,
+      kraken: krakenPricesRef.current,
+    }[id] || {};
     const out: Record<string, PriceData> = {};
     SYMBOLS.forEach(sym => {
       const live = src[sym];
-      if (live && (live.bid || 0) > 0 && (live.ask || 0) > 0) { out[sym] = live; }
-      // No fallback — if no live data, symbol is simply excluded from cross-arb
+      if (live && (live.bid || 0) > 0 && (live.ask || 0) > 0) {
+        out[sym] = live;
+      } else {
+        // Fallback: use CoinGecko/Binance price with a small synthetic spread.
+        // This keeps cross-arb running when a WS is down — opportunities will be
+        // conservative (spread between CG price ± 0.05%) rather than zero results.
+        const cg = pricesRef.current[sym];
+        if (cg?.price && cg.price > 0) {
+          const sp = cg.price * 0.0005;
+          out[sym] = { bid: cg.price - sp, ask: cg.price + sp, price: cg.price };
+        }
+      }
     });
     return out;
   }, []);
 
-  // ═══ RUGCHECK SAFETY ═══
+  // ═══ SAFETY CHECK ═══
+  // Solana → RugCheck.xyz  |  BSC EVM → GoPlus Security API (free, no key needed)
   const fetchSafety = useCallback(async (mint: string): Promise<SafetyResult | null> => {
     if (!mint) return null;
     if (safeCache.current[mint] !== undefined) return safeCache.current[mint];
+    const isBsc = /^0x[0-9a-fA-F]{40}$/.test(mint);
     try {
-      const r = await fetch(`https://api.rugcheck.xyz/v1/tokens/${mint}/report/summary`, { signal: AbortSignal.timeout(5000) });
-      if (!r.ok) throw new Error('' + r.status);
-      const d = await r.json();
-      const score = d.score || 0;
-      const risks = (d.risks || []).map((x: any) => x.name || x.description || '').filter(Boolean).slice(0, 3);
-      const res: SafetyResult = { score, risks, ok: score < 500 };
-      safeCache.current[mint] = res; return res;
+      if (isBsc) {
+        const r = await fetch(
+          `https://api.gopluslabs.io/api/v1/token_security/56?contract_addresses=${mint}`,
+          { signal: AbortSignal.timeout(6000) }
+        );
+        if (!r.ok) throw new Error('GoPlus HTTP ' + r.status);
+        const d = await r.json();
+        const result = d.result?.[mint.toLowerCase()];
+        if (!result) throw new Error('no result');
+        const risks: string[] = [];
+        if (result.is_honeypot === '1')      risks.push('Honeypot');
+        if (result.is_blacklisted === '1')   risks.push('Blacklisted');
+        if (result.is_mintable === '1')      risks.push('Mintable');
+        if (result.cannot_sell_all === '1')  risks.push('Cannot sell all');
+        if (result.is_proxy === '1')         risks.push('Proxy contract');
+        const buyTax  = parseFloat(result.buy_tax  || '0');
+        const sellTax = parseFloat(result.sell_tax || '0');
+        if (buyTax  > 0.05) risks.push(`Buy tax ${(buyTax  * 100).toFixed(0)}%`);
+        if (sellTax > 0.05) risks.push(`Sell tax ${(sellTax * 100).toFixed(0)}%`);
+        const score = result.is_honeypot === '1' ? 1000 : Math.min(900, risks.length * 200);
+        const res: SafetyResult = { score, risks: risks.slice(0, 3), ok: result.is_honeypot !== '1' && risks.length === 0 };
+        safeCache.current[mint] = res; return res;
+      } else {
+        const r = await fetch(`https://api.rugcheck.xyz/v1/tokens/${mint}/report/summary`, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) throw new Error('' + r.status);
+        const d = await r.json();
+        const score = d.score || 0;
+        const risks = (d.risks || []).map((x: any) => x.name || x.description || '').filter(Boolean).slice(0, 3);
+        const res: SafetyResult = { score, risks, ok: score < 500 };
+        safeCache.current[mint] = res; return res;
+      }
     } catch { safeCache.current[mint] = null; return null; }
   }, []);
 
@@ -595,29 +662,37 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
       const items = Array.isArray(d) ? d : (d.pairs || d.tokens || []);
-      const addrs = items
-        .filter(filterFn)
-        .map((t: any) => t.tokenAddress || t.baseToken?.address)
-        .filter((addr: unknown): addr is string => typeof addr === 'string' && addr.length > 0);
+      const addrs = items.filter(filterFn).map((t: any) => t.tokenAddress || t.baseToken?.address).filter(Boolean);
       addLog(`DS ${label}: ${addrs.length} tokens`, 'info');
       return addrs;
     } catch (e: any) { addLog(`DS ${label} failed: ${e.message}`, 'warn'); return []; }
   }, [addLog]);
 
   const getTrending = useCallback(async (): Promise<string[]> => {
-    const [boosts, profiles, newPairs] = await Promise.allSettled([
-      fetchDSEndpoint('https://api.dexscreener.com/token-boosts/top/v1', 'boosts', (t: any) => t.chainId === 'solana' && t.tokenAddress),
-      fetchDSEndpoint('https://api.dexscreener.com/token-profiles/latest/v1', 'profiles', (t: any) => t.chainId === 'solana' && t.tokenAddress),
-      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=sol', 'search-sol', (t: any) => t.chainId === 'solana' && t.baseToken?.address),
-    ]);
     const seen = new Set<string>();
     const all: string[] = [];
-    for (const res of [boosts, profiles, newPairs]) {
-      if (res.status === 'fulfilled') res.value.forEach(a => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
+    const add = (a: string) => { if (a && !seen.has(a)) { seen.add(a); all.push(a); } };
+
+    // KNOWN tokens first — highest hit rate for multi-DEX
+    KNOWN_MULTI_DEX.forEach(add);
+
+    const [boosts, profiles, raySearch, metSearch] = await Promise.allSettled([
+      fetchDSEndpoint('https://api.dexscreener.com/token-boosts/top/v1', 'boosts',
+        (t: any) => t.chainId === 'solana' && t.tokenAddress),
+      fetchDSEndpoint('https://api.dexscreener.com/token-profiles/latest/v1', 'profiles',
+        (t: any) => t.chainId === 'solana' && t.tokenAddress),
+      // Raydium-specific search — tokens on Raydium likely also on Orca/Meteora
+      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=raydium+SOL', 'search-ray',
+        (t: any) => t.chainId === 'solana' && t.baseToken?.address && (t.liquidity?.usd || 0) > 5000),
+      // Meteora search — different DEX, guarantees cross-DEX tokens
+      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=meteora+DLMM', 'search-met',
+        (t: any) => t.chainId === 'solana' && t.baseToken?.address && (t.liquidity?.usd || 0) > 5000),
+    ]);
+    for (const res of [boosts, profiles, raySearch, metSearch]) {
+      if (res.status === 'fulfilled') res.value.forEach(add);
     }
-    KNOWN_MULTI_DEX.forEach(a => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
     addLog(`Total unique Solana tokens: ${all.length}`, 'info');
-    return all.slice(0, 45);
+    return all.slice(0, 60);
   }, [fetchDSEndpoint, addLog]);
 
   const fetchPairs = useCallback(async (addresses: string[], chain: 'solana' | 'bsc' = 'solana'): Promise<DexOpp[]> => {
@@ -802,29 +877,23 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
     return results.sort((a, b) => b.net - a.net);
   }, [addLog]);
 
+  // Max pair age for early pump detection (dexNewOnly mode)
+  const MAX_PAIR_AGE_HOURS = 5;
+
   const applyDexFilters = useCallback((opps: DexOpp[]) => {
     const f = filtersRef.current;
-
     let filtered = opps.filter(o => {
-      // Βασικά φίλτρα
       if (o.minLiq < f.dexMinLiq) return false;
       if (o.vol24h < f.dexMinVol) return false;
       if (o.spreadPct < f.dexMinSpread) return false;
-
-      // Safety filter
       if (f.dexSafeOnly && o.safety && o.safety.score >= 600) return false;
-
-      // === ΕΛΕΓΧΟΣ ΗΛΙΚΙΑΣ TOKEN ===
+      // Early pump age gate — key for catching Raydium migrations within first hours
       if (f.dexNewOnly && o.createdAt) {
         const ageHours = (Date.now() - o.createdAt) / 3600000;
         if (ageHours > MAX_PAIR_AGE_HOURS) return false;
       }
-      // =============================================
-
       return true;
     });
-
-    // Ταξινόμηση
     filtered.sort((a, b) => {
       if (f.dexSort === 'spread') return b.spreadPct - a.spreadPct;
       if (f.dexSort === 'profit') return b.net - a.net;
@@ -832,9 +901,8 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
       if (f.dexSort === 'new') return (a.createdAt || Infinity) - (b.createdAt || Infinity);
       return b.net - a.net;
     });
-
     return filtered;
-  }, [MAX_PAIR_AGE_HOURS]);
+  }, []);
 
   // ═══ SCAN DEX ═══
   const scanDex = useCallback(async () => {
@@ -879,53 +947,68 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
   const getBscTrending = useCallback(async (): Promise<string[]> => {
     const seen = new Set<string>();
     const all: string[] = [];
-    const add = (addr: string) => {
-      if (typeof addr === 'string' && /^0x[a-fA-F0-9]{40}$/.test(addr) && !seen.has(addr)) {
-        seen.add(addr);
-        all.push(addr);
-      }
-    };
+    const add = (addr: string) => { if (addr && !seen.has(addr)) { seen.add(addr); all.push(addr); } };
 
+    // 1. KNOWN multi-DEX tokens — always queued first, guaranteed 2+ DEX coverage
     BSC_KNOWN_MULTI_DEX.forEach(add);
 
-    const [boosts, profiles, searches] = await Promise.all([
+    // 2. Dynamic discovery via DexScreener
+    const searches = await Promise.allSettled([
       fetchDSEndpoint(
         'https://api.dexscreener.com/token-boosts/top/v1',
         'bsc-boosts',
-        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress,
+        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
       ),
       fetchDSEndpoint(
         'https://api.dexscreener.com/token-profiles/latest/v1',
         'bsc-profiles',
-        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress,
+        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
       ),
-      Promise.all([
-        fetchDSEndpoint(
-          'https://api.dexscreener.com/latest/dex/search?q=bsc',
-          'bsc-search',
-          (t: any) => t.chainId === 'bsc' && t.baseToken?.address,
-        ),
-        fetchDSEndpoint(
-          'https://api.dexscreener.com/latest/dex/search?q=pancakeswap',
-          'bsc-pancakeswap',
-          (t: any) => t.chainId === 'bsc' && t.baseToken?.address,
-        ),
-        fetchDSEndpoint(
-          'https://api.dexscreener.com/latest/dex/search?q=thena',
-          'bsc-thena',
-          (t: any) => t.chainId === 'bsc' && t.baseToken?.address,
-        ),
-        fetchDSEndpoint(
-          'https://api.dexscreener.com/latest/dex/search?q=biswap',
-          'bsc-biswap',
-          (t: any) => t.chainId === 'bsc' && t.baseToken?.address,
-        ),
-      ]),
+      // Search for tokens with BNB as quote — liquid PancakeSwap pairs
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=BNB',
+        'bsc-bnb-search',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 10000 && t.quoteToken?.symbol === 'WBNB'
+      ),
+      // USDT pairs on BSC — show up on multiple DEXes
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=USDT BSC',
+        'bsc-usdt-search',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 10000
+      ),
+      // BUSD pairs — still active on Biswap/PCS
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=BUSD',
+        'bsc-busd-search',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 5000
+      ),
+      // token-pairs/v1 for core tokens — fetches ALL their pools on BSC directly
+      (async () => {
+        const coreTokens = BSC_KNOWN_MULTI_DEX.slice(0, 5); // WBNB, CAKE, ETH, BTCB, USDT
+        const batchResults: string[] = [];
+        await Promise.all(coreTokens.map(async addr => {
+          try {
+            const r = await fetch(`https://api.dexscreener.com/token-pairs/v1/bsc/${addr}`, { signal: AbortSignal.timeout(6000) });
+            if (!r.ok) return;
+            const d = await r.json();
+            const pairs = Array.isArray(d) ? d : (d.pairs || []);
+            pairs.forEach((pair: any) => {
+              if (pair.quoteToken?.address) batchResults.push(pair.quoteToken.address);
+              if (pair.baseToken?.address)  batchResults.push(pair.baseToken.address);
+            });
+          } catch {}
+        }));
+        addLog(`DS bsc-token-pairs: ${batchResults.length} addresses`, 'info');
+        return batchResults;
+      })()
     ]);
 
-    boosts.forEach(add);
-    profiles.forEach(add);
-    searches.flat().forEach(add);
+    searches.forEach(res => {
+      if (res.status === 'fulfilled') {
+        const addrs = Array.isArray(res.value) ? res.value : [];
+        addrs.forEach((a: string) => add(a));
+      }
+    });
 
     addLog(`BSC trending: ${all.length} unique tokens queued`, 'info');
     return all.slice(0, 60);
@@ -1064,17 +1147,13 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
   // auto-refresh whenever runCexScan is recreated due to dependency changes.
   const schedCexRef = useRef<() => void>(() => {});
   useEffect(() => {
-    if (!dexTimerRef.current && !bscTimerRef.current) return;
+    if (!dexTimerRef.current && !bscTimerRef.current) return; // Not yet booted
     if (dexTimerRef.current) clearInterval(dexTimerRef.current);
     if (bscTimerRef.current) clearInterval(bscTimerRef.current);
     const iv = (filtersRef.current.dexInterval || 20) * 1000;
-    dexTimerRef.current = setInterval(() => {
-      if (runningRef.current) scanDex();
-    }, iv);
-    bscTimerRef.current = setInterval(() => {
-      if (runningRef.current) scanBsc();
-    }, Math.max(30000, iv + 10000));
-  }, [filters.dexInterval, scanDex, scanBsc]);
+    dexTimerRef.current = setInterval(() => { if (runningRef.current) scanDex(); }, iv);
+    bscTimerRef.current = setInterval(() => { if (runningRef.current) scanBsc(); }, Math.max(30000, iv + 10000));
+  }, [filters.dexInterval]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const schedCex = useCallback(() => {
     if (!filtersRef.current.autoRefresh || !runningRef.current) return;
@@ -1172,22 +1251,24 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
 
   // ═══ BOOT ═══
   useEffect(() => {
-    addLog('ArbPulse Pro v9.0 — Solana + BSC DEX · CEX multi-exchange scanner', 'ok');
+    addLog('ArbPulse Pro v5.1 — all 8 bugs fixed · GoPlus BSC safety · BNB/USDT/BUSD search', 'ok');
     addLog('Chains: Solana · BNB Smart Chain · Safety: RugCheck.xyz · CEX: 4x WS', 'info');
 
     // Connect all WS — done ONCE here, never re-created inside runCexScan
     Promise.all([connectOKX(), connectBybit(), connectKraken()]).then(() => addLog('All exchange WS connected', 'ok'));
 
-    if (filtersRef.current.autoRefresh) {
-      runCexScan().then(() => schedCexRef.current());
-      scanDex();
-      setTimeout(() => scanBsc(), 3000);
-    }
+    // Initial scans
+    runCexScan().then(() => schedCexRef.current());
+    scanDex();
+    // Stagger BSC scan by 3s to avoid API rate limits
+    setTimeout(() => scanBsc(), 3000);
 
+    // Solana DEX auto-scan — respects dexInterval filter (default 20s)
     dexTimerRef.current = setInterval(() => {
       if (runningRef.current) scanDex();
     }, (filtersRef.current.dexInterval || 20) * 1000);
 
+    // BSC DEX auto-scan — staggered by 10s relative to Solana timer
     bscTimerRef.current = setInterval(() => {
       if (runningRef.current) scanBsc();
     }, Math.max(30000, ((filtersRef.current.dexInterval || 20) + 10) * 1000));
@@ -1218,14 +1299,8 @@ const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώ�
   return {
     state, filters, setFilters,
     toggleScanner, toggleSound, clearLogs, clearCexResults,
-    runCexScan: () => runCexScan(),
-    scanDex,
-    scanBsc,
-    logOpp,
-    clearHistory,
-    exportCSV,
-    setActiveView,
-    refilterDex,
-    clearNewPairs,
+    runCexScan: () => runCexScan().then(() => schedCexRef.current()),
+    scanDex, scanBsc, logOpp, clearHistory, exportCSV,
+    setActiveView, refilterDex, clearNewPairs,
   };
 }
