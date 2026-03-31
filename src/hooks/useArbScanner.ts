@@ -843,44 +843,53 @@ export function useArbScanner() {
   const getBscTrending = useCallback(async (): Promise<string[]> => {
     const seen = new Set<string>();
     const all: string[] = [];
-    const add = (addr: string) => { if (addr && !seen.has(addr)) { seen.add(addr); all.push(addr); } };
+    const add = (addr: string) => {
+      if (typeof addr === 'string' && /^0x[a-fA-F0-9]{40}$/.test(addr) && !seen.has(addr)) {
+        seen.add(addr);
+        all.push(addr);
+      }
+    };
 
-    // 1. KNOWN multi-DEX tokens — always first (these reliably have pairs on PancakeSwap, Biswap, THENA, etc.)
     BSC_KNOWN_MULTI_DEX.forEach(add);
 
-    // 2. Use BSC-specific DexScreener endpoints that actually return BSC pairs
-    //    NOTE: search queries like "WBNB" return Solana/ETH wrapped versions, NOT BSC pairs.
-    //    Instead, use token-boosts/profiles filtered to BSC, and pairs endpoint by chain.
-    const searches = await Promise.allSettled([
-      // Token boosts — BSC tokens getting promoted
-      // DexScreener uses 'bsc' internally but some API versions return 'binance-smart-chain'
+    const [boosts, profiles, searches] = await Promise.all([
       fetchDSEndpoint(
         'https://api.dexscreener.com/token-boosts/top/v1',
         'bsc-boosts',
-        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
+        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress,
       ),
-      // Token profiles — recently created BSC token profiles
       fetchDSEndpoint(
         'https://api.dexscreener.com/token-profiles/latest/v1',
         'bsc-profiles',
-        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
+        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress,
       ),
-      // Use pairs endpoint filtered by BSC chain — search for major quote tokens
-      fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/pairs/bsc/0x16b9a82891338f9bA80E2D6970FddA79D1eb0daE,0x172fcD41E0913e95784454622d1c3724f546f849,0x58F876857a02D6762E0101bb5C46A8c1ED44Dc16,0x7EFaEf62fDdCCa950418312c6C91Aef321375A00,0x0eD7e52944161450477ee417DE9Cd3a859b14fD0',
-        'bsc-pairs-1',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address
-      ),
-      // More popular BSC pairs (PancakeSwap V3 pools)
-      fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/pairs/bsc/0x36696169C63e42cd08ce11f5deeBbCeBae652050,0x92b7807bF19b7DDdf89b706143896d05228f3121,0x7f51c8AaA6B0599aBd16674e2b17FEc7a9f674A1',
-        'bsc-pairs-2',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address
-      ),
+      Promise.all([
+        fetchDSEndpoint(
+          'https://api.dexscreener.com/latest/dex/search?q=bsc',
+          'bsc-search',
+          (t: any) => t.chainId === 'bsc' && t.baseToken?.address,
+        ),
+        fetchDSEndpoint(
+          'https://api.dexscreener.com/latest/dex/search?q=pancakeswap',
+          'bsc-pancakeswap',
+          (t: any) => t.chainId === 'bsc' && t.baseToken?.address,
+        ),
+        fetchDSEndpoint(
+          'https://api.dexscreener.com/latest/dex/search?q=thena',
+          'bsc-thena',
+          (t: any) => t.chainId === 'bsc' && t.baseToken?.address,
+        ),
+        fetchDSEndpoint(
+          'https://api.dexscreener.com/latest/dex/search?q=biswap',
+          'bsc-biswap',
+          (t: any) => t.chainId === 'bsc' && t.baseToken?.address,
+        ),
+      ]),
     ]);
-    searches.forEach(res => {
-      if (res.status === 'fulfilled') res.value.forEach((a: string) => add(a));
-    });
+
+    boosts.forEach(add);
+    profiles.forEach(add);
+    searches.flat().forEach(add);
 
     addLog(`BSC trending: ${all.length} unique tokens queued`, 'info');
     return all.slice(0, 60);
