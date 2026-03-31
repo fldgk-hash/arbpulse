@@ -573,7 +573,10 @@ export function useArbScanner() {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
       const items = Array.isArray(d) ? d : (d.pairs || d.tokens || []);
-      const addrs = items.filter(filterFn).map((t: any) => t.tokenAddress || t.baseToken?.address).filter(Boolean);
+      const addrs = items
+        .filter(filterFn)
+        .map((t: any) => t.tokenAddress || t.baseToken?.address)
+        .filter((addr: unknown): addr is string => typeof addr === 'string' && addr.length > 0);
       addLog(`DS ${label}: ${addrs.length} tokens`, 'info');
       return addrs;
     } catch (e: any) { addLog(`DS ${label} failed: ${e.message}`, 'warn'); return []; }
@@ -840,44 +843,53 @@ export function useArbScanner() {
   const getBscTrending = useCallback(async (): Promise<string[]> => {
     const seen = new Set<string>();
     const all: string[] = [];
-    const add = (addr: string) => { if (addr && !seen.has(addr)) { seen.add(addr); all.push(addr); } };
+    const add = (addr: string) => {
+      if (typeof addr === 'string' && /^0x[a-fA-F0-9]{40}$/.test(addr) && !seen.has(addr)) {
+        seen.add(addr);
+        all.push(addr);
+      }
+    };
 
-    // 1. KNOWN multi-DEX tokens — always first (these reliably have pairs on PancakeSwap, Biswap, THENA, etc.)
     BSC_KNOWN_MULTI_DEX.forEach(add);
 
-    // 2. Use BSC-specific DexScreener endpoints that actually return BSC pairs
-    //    NOTE: search queries like "WBNB" return Solana/ETH wrapped versions, NOT BSC pairs.
-    //    Instead, use token-boosts/profiles filtered to BSC, and pairs endpoint by chain.
-    const searches = await Promise.allSettled([
-      // Token boosts — BSC tokens getting promoted
-      // DexScreener uses 'bsc' internally but some API versions return 'binance-smart-chain'
+    const [boosts, profiles, searches] = await Promise.all([
       fetchDSEndpoint(
         'https://api.dexscreener.com/token-boosts/top/v1',
         'bsc-boosts',
-        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
+        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress,
       ),
-      // Token profiles — recently created BSC token profiles
       fetchDSEndpoint(
         'https://api.dexscreener.com/token-profiles/latest/v1',
         'bsc-profiles',
-        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
+        (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress,
       ),
-      // Use pairs endpoint filtered by BSC chain — search for major quote tokens
-      fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/pairs/bsc/0x16b9a82891338f9bA80E2D6970FddA79D1eb0daE,0x172fcD41E0913e95784454622d1c3724f546f849,0x58F876857a02D6762E0101bb5C46A8c1ED44Dc16,0x7EFaEf62fDdCCa950418312c6C91Aef321375A00,0x0eD7e52944161450477ee417DE9Cd3a859b14fD0',
-        'bsc-pairs-1',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address
-      ),
-      // More popular BSC pairs (PancakeSwap V3 pools)
-      fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/pairs/bsc/0x36696169C63e42cd08ce11f5deeBbCeBae652050,0x92b7807bF19b7DDdf89b706143896d05228f3121,0x7f51c8AaA6B0599aBd16674e2b17FEc7a9f674A1',
-        'bsc-pairs-2',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address
-      ),
+      Promise.all([
+        fetchDSEndpoint(
+          'https://api.dexscreener.com/latest/dex/search?q=bsc',
+          'bsc-search',
+          (t: any) => t.chainId === 'bsc' && t.baseToken?.address,
+        ),
+        fetchDSEndpoint(
+          'https://api.dexscreener.com/latest/dex/search?q=pancakeswap',
+          'bsc-pancakeswap',
+          (t: any) => t.chainId === 'bsc' && t.baseToken?.address,
+        ),
+        fetchDSEndpoint(
+          'https://api.dexscreener.com/latest/dex/search?q=thena',
+          'bsc-thena',
+          (t: any) => t.chainId === 'bsc' && t.baseToken?.address,
+        ),
+        fetchDSEndpoint(
+          'https://api.dexscreener.com/latest/dex/search?q=biswap',
+          'bsc-biswap',
+          (t: any) => t.chainId === 'bsc' && t.baseToken?.address,
+        ),
+      ]),
     ]);
-    searches.forEach(res => {
-      if (res.status === 'fulfilled') res.value.forEach((a: string) => add(a));
-    });
+
+    boosts.forEach(add);
+    profiles.forEach(add);
+    searches.flat().forEach(add);
 
     addLog(`BSC trending: ${all.length} unique tokens queued`, 'info');
     return all.slice(0, 60);
@@ -1016,13 +1028,17 @@ export function useArbScanner() {
   // auto-refresh whenever runCexScan is recreated due to dependency changes.
   const schedCexRef = useRef<() => void>(() => {});
   useEffect(() => {
-    if (!dexTimerRef.current && !bscTimerRef.current) return; // Not yet booted
+    if (!dexTimerRef.current && !bscTimerRef.current) return;
     if (dexTimerRef.current) clearInterval(dexTimerRef.current);
     if (bscTimerRef.current) clearInterval(bscTimerRef.current);
     const iv = (filtersRef.current.dexInterval || 20) * 1000;
-    dexTimerRef.current = setInterval(() => { if (runningRef.current) scanDex(); }, iv);
-    bscTimerRef.current = setInterval(() => { if (runningRef.current) scanBsc(); }, Math.max(30000, iv + 10000));
-  }, [filters.dexInterval]); // eslint-disable-line react-hooks/exhaustive-deps
+    dexTimerRef.current = setInterval(() => {
+      if (runningRef.current) scanDex();
+    }, iv);
+    bscTimerRef.current = setInterval(() => {
+      if (runningRef.current) scanBsc();
+    }, Math.max(30000, iv + 10000));
+  }, [filters.dexInterval, scanDex, scanBsc]);
 
   const schedCex = useCallback(() => {
     if (!filtersRef.current.autoRefresh || !runningRef.current) return;
@@ -1126,18 +1142,16 @@ export function useArbScanner() {
     // Connect all WS — done ONCE here, never re-created inside runCexScan
     Promise.all([connectOKX(), connectBybit(), connectKraken()]).then(() => addLog('All exchange WS connected', 'ok'));
 
-    // Initial scans
-    runCexScan().then(() => schedCexRef.current());
-    scanDex();
-    // Stagger BSC scan by 3s to avoid API rate limits
-    setTimeout(() => scanBsc(), 3000);
+    if (filtersRef.current.autoRefresh) {
+      runCexScan().then(() => schedCexRef.current());
+      scanDex();
+      setTimeout(() => scanBsc(), 3000);
+    }
 
-    // Solana DEX auto-scan — respects dexInterval filter (default 20s)
     dexTimerRef.current = setInterval(() => {
       if (runningRef.current) scanDex();
     }, (filtersRef.current.dexInterval || 20) * 1000);
 
-    // BSC DEX auto-scan — staggered by 10s relative to Solana timer
     bscTimerRef.current = setInterval(() => {
       if (runningRef.current) scanBsc();
     }, Math.max(30000, ((filtersRef.current.dexInterval || 20) + 10) * 1000));
@@ -1168,8 +1182,14 @@ export function useArbScanner() {
   return {
     state, filters, setFilters,
     toggleScanner, toggleSound, clearLogs, clearCexResults,
-    runCexScan: () => runCexScan().then(() => schedCexRef.current()),
-    scanDex, scanBsc, logOpp, clearHistory, exportCSV,
-    setActiveView, refilterDex, clearNewPairs,
+    runCexScan: () => runCexScan(),
+    scanDex,
+    scanBsc,
+    logOpp,
+    clearHistory,
+    exportCSV,
+    setActiveView,
+    refilterDex,
+    clearNewPairs,
   };
 }
