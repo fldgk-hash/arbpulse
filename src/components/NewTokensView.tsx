@@ -26,7 +26,7 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
       if (chainFilter !== 'all' && p.chain !== chainFilter) return false;
       if (arbOnly && !p.hasMultiDex) return false;
       if (minLiq > 0 && p.liq < minLiq) return false;
-      const age = p.createdAt ? now - p.createdAt : now - p.seenAt;
+      const age = p.createdAt !== null ? now - p.createdAt : Infinity; // Infinity → only shows in 'all'
       if (age > AGE_MS[ageFilter]) return false;
       return true;
     });
@@ -139,8 +139,11 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
 function NewPairCard({ pair: p }: { pair: NewPairEntry }) {
   const [copied, setCopied] = useState(false);
   const now = Date.now();
-  const ageMs = p.createdAt ? now - p.createdAt : now - p.seenAt;
-  const isFresh = ageMs < 3600000;      // < 1h
+  // FIX: ageMs must use createdAt ONLY — seenAt is "when WE scanned it", not "when it was created".
+  // Using seenAt as fallback made years-old pairs show as 🔴 NEW (seenAt ≈ now → ageMs ≈ 0).
+  // If createdAt is null → age is unknown → treat as old (Infinity) → no fresh badge.
+  const ageMs = p.createdAt !== null ? now - p.createdAt : Infinity;
+  const isFresh = ageMs < 3600000;      // < 1h on-chain age
   const isVFresh = ageMs < 1800000;     // < 30min — pulse animation
   const isBsc = p.chain === 'bsc';
 
@@ -157,10 +160,13 @@ function NewPairCard({ pair: p }: { pair: NewPairEntry }) {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  // DEX label maps
-  const solNames: Record<string, string> = { raydium: 'Raydium', 'pump-fun': 'Pump.fun', meteora: 'Meteora', orca: 'Orca', jupiter: 'Jupiter' };
-  const bscNames: Record<string, string> = { 'pancakeswap-v3': 'PCS V3', 'pancakeswap-v2': 'PCS V2', 'uniswap-v3-bsc': 'UNI V3', 'thena-v3': 'THENA V3', biswap: 'Biswap', apeswap: 'ApeSwap' };
-  const dexLabel = (isBsc ? bscNames : solNames)[p.dex] || p.dex;
+  const solNames: Record<string, string> = { raydium: 'Raydium', 'pump-fun': 'Pump.fun', meteora: 'Meteora', orca: 'Orca', jupiter: 'Jupiter', 'raydium-clmm': 'Raydium CLMM', 'raydium-cp': 'Raydium CP', whirlpool: 'Whirlpool' };
+  const bscNames: Record<string, string> = { 'pancakeswap-v3': 'PCS V3', 'pancakeswap-v2': 'PCS V2', 'pancakeswap': 'PancakeSwap', 'uniswap-v3-bsc': 'UNI V3', 'uniswap-v4-bsc': 'UNI V4', 'uniswap': 'Uniswap', 'thena-v3': 'THENA V3', 'thena-fusion': 'THENA', biswap: 'Biswap', 'biswap-v3': 'Biswap V3', apeswap: 'ApeSwap', babyswap: 'BabySwap', sushiswap: 'SushiSwap', 'sushiswap-v3': 'Sushi V3', squadswap: 'SquadSwap', 'ellipsis-finance': 'Ellipsis' };
+  const rawDex = p.dex.startsWith('unknown:') ? p.dex.slice(8) : p.dex; // strip our "unknown:" flag
+  const isContractAddr = /^0x[0-9a-fA-F]{8,}/.test(rawDex);
+  const dexLabel = isContractAddr
+    ? rawDex.slice(0, 6) + '…' + rawDex.slice(-4) // show short addr, not full 42 chars
+    : ((isBsc ? bscNames : solNames)[rawDex] || rawDex);
 
   return (
     <div className={`rounded-md border p-2.5 transition-all ${
@@ -206,7 +212,7 @@ function NewPairCard({ pair: p }: { pair: NewPairEntry }) {
 
         {/* Age */}
         <span className="text-[9px] text-arb-muted whitespace-nowrap flex-shrink-0">
-          {fmtAge(p.createdAt || p.seenAt)}
+          {p.createdAt ? fmtAge(p.createdAt) : `seen ${fmtAge(p.seenAt)}`}
         </span>
       </div>
 
