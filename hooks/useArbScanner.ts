@@ -154,9 +154,9 @@ export interface DexOpp {
 }
 
 // TVL threshold below which we flag a pair as low-liquidity risk
-export const LOW_LIQ_THRESHOLD = 10000;
+export const LOW_LIQ_THRESHOLD = 12000;
 // BSC has higher gas costs + more aggressive MEV bots → higher min liquidity
-export const BSC_LOW_LIQ_THRESHOLD = 25000;
+export const BSC_LOW_LIQ_THRESHOLD = 18000;
 
 // Issue #3: Normalize DexScreener DEX IDs to match our fee map keys
 // IMPORTANT: Do NOT merge v2/v3 — they are different DEXes for arbitrage purposes.
@@ -321,12 +321,29 @@ export function useArbScanner() {
   });
 
   const [filters, setFilters] = useState<ScannerFilters>({
-    minSpread: 0.04, minProfit: 0.5, tradeSize: 1000,
-    alertThreshold: 0.5, showTri: true, showCross: true, autoRefresh: true,
-    dexMinLiq: 1000, dexMinVol: 200, dexMinSpread: 0.05, // lowered: BSC/SOL real spreads are 0.05–0.4%
-    dexSafeOnly: true, dexNewOnly: false, dexSort: 'spread',
+    minSpread: 0.024,
+    minProfit: 18,
+    tradeSize: 800,
+
+    alertThreshold: 0.4,
+    showTri: true,
+    showCross: true,
+    autoRefresh: true,
+
+    dexMinLiq: 12500,
+    dexMinVol: 28000,
+    dexMinSpread: 0.024,
+
+    dexSafeOnly: false,
+    dexNewOnly: true,
+    dexSort: 'profit',
     dexChain: 'solana',
-    cexInterval: 25, dexInterval: 20,
+
+    cexInterval: 25,
+    dexInterval: 15,
+
+    // === ΝΕΟ ΦΙΛΤΡΟ: Volume / MC Ratio ===
+    minVolumeMCRatio: 4.5,        // ≥ 4.5x  (4.0 = πιο aggressive, 5.5 = πιο ποιοτικά)
   });
 
   const pricesRef = useRef<Record<string, PriceData>>({});
@@ -466,7 +483,7 @@ export function useArbScanner() {
         addLog(`Binance WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
         setTimeout(() => { if (runningRef.current) connectWS(); }, delay);
       };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 18000);
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
     });
   }, [addLog, setExStatus]);
 
@@ -503,7 +520,7 @@ export function useArbScanner() {
         addLog(`OKX WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
         setTimeout(() => { if (runningRef.current) connectOKX(); }, delay);
       };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 18000);
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
     });
   }, [addLog, setExStatus]);
 
@@ -539,7 +556,7 @@ export function useArbScanner() {
         addLog(`Bybit WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
         setTimeout(() => { if (runningRef.current) connectBybit(); }, delay);
       };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 18000);
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
     });
   }, [addLog, setExStatus]);
 
@@ -580,7 +597,7 @@ export function useArbScanner() {
         addLog(`Kraken WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
         setTimeout(() => { if (runningRef.current) connectKraken(); }, delay);
       };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 18000);
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
     });
   }, [addLog, setExStatus]);
 
@@ -1249,7 +1266,7 @@ export function useArbScanner() {
     runCexScan().then(() => schedCexRef.current());
     scanDex();
     // Stagger BSC scan by 3s to avoid API rate limits
-    setTimeout(() => scanBsc(), 6000);
+    setTimeout(() => scanBsc(), 4000);
 
     // Solana DEX auto-scan — respects dexInterval filter (default 20s)
     dexTimerRef.current = setInterval(() => {
