@@ -154,9 +154,9 @@ export interface DexOpp {
 }
 
 // TVL threshold below which we flag a pair as low-liquidity risk
-export const LOW_LIQ_THRESHOLD = 10000;
+export const LOW_LIQ_THRESHOLD = 25000;
 // BSC has higher gas costs + more aggressive MEV bots → higher min liquidity
-export const BSC_LOW_LIQ_THRESHOLD = 25000;
+export const BSC_LOW_LIQ_THRESHOLD = 35000;
 
 // Issue #3: Normalize DexScreener DEX IDs to match our fee map keys
 // IMPORTANT: Do NOT merge v2/v3 — they are different DEXes for arbitrage purposes.
@@ -321,13 +321,35 @@ export function useArbScanner() {
   });
 
   const [filters, setFilters] = useState<ScannerFilters>({
-    minSpread: 0.04, minProfit: 0.5, tradeSize: 1000,
-    alertThreshold: 0.5, showTri: true, showCross: true, autoRefresh: true,
-    dexMinLiq: 1000, dexMinVol: 200, dexMinSpread: 0.1,
-    dexSafeOnly: true, dexNewOnly: false, dexSort: 'spread',
+    minSpread: 0.025,           // (ή ό,τι έχεις βάλει στην aggressive έκδοση)
+    minProfit: 15,
+    tradeSize: 1000,
+    alertThreshold: 0.4,
+    showTri: true,
+    showCross: true,
+    autoRefresh: true,
+
+    dexMinLiq: 12000,
+    dexMinVol: 35000,
+    dexMinSpread: 0.025,
+
+    dexSafeOnly: false,
+    dexNewOnly: true,
+    dexSort: 'profit',
     dexChain: 'solana',
-    cexInterval: 25, dexInterval: 20,
-  });
+
+    cexInterval: 25,
+    dexInterval: 18,
+});
+
+// ==================== ΝΕΕΣ ΓΡΑΜΜΕΣ ΠΟΥ ΠΡΟΣΘΕΤΟΥΜΕ ====================
+const MAX_PAIR_AGE_HOURS = 8;     // Μόνο tokens νεότερα από 8 ώρες όταν είναι ενεργό το dexNewOnly
+
+// Μπορείς να αλλάξεις εύκολα την τιμή εδώ ανάλογα με το mode:
+// Aggressive → 4-6 ώρες
+// Balanced   → 8-12 ώρες
+// Safe       → 24 ώρες
+// =====================================================================
 
   const pricesRef = useRef<Record<string, PriceData>>({});
   const bookRef = useRef<Record<string, { bid: number; ask: number }>>({});
