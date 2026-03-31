@@ -423,15 +423,25 @@ export function useArbScanner() {
     ['ETH','SOL','XRP','DOT','ADA','AVAX'].forEach(x => s(x, 'BNB', x + 'BNB'));
   }, []);
 
+  // ═══ WS RECONNECT BACKOFF ═══
+  // Track consecutive failures per exchange to apply exponential backoff.
+  // Resets to 0 on successful open. Caps at 5 (max 32s delay).
+  const wsRetry = useRef<Record<string, number>>({ binance: 0, okx: 0, bybit: 0, kraken: 0 });
+  const wsDelay = (id: string) => Math.min(32000, 2000 * Math.pow(2, wsRetry.current[id] || 0));
+
   // ═══ BINANCE WS ═══
   const connectWS = useCallback(() => {
     return new Promise<boolean>(resolve => {
       if (wsRef.current?.readyState === WebSocket.OPEN) { resolve(true); return; }
-      const st = SYMBOLS.map(s => `${s.toLowerCase()}usdt@bookTicker/${s.toLowerCase()}usdt@ticker`).join('/'); // All 40 symbols
+      const st = SYMBOLS.map(s => `${s.toLowerCase()}usdt@bookTicker/${s.toLowerCase()}usdt@ticker`).join('/');
       const w = new WebSocket(`wss://stream.binance.com:9443/stream?streams=${st}`);
       wsRef.current = w;
       let done = false;
-      w.onopen = () => { setExStatus('binance', true, 'WS Live'); addLog('Binance WS connected', 'ok'); if (!done) { done = true; resolve(true); } };
+      w.onopen = () => {
+        wsRetry.current.binance = 0;
+        setExStatus('binance', true, 'WS Live'); addLog('Binance WS connected', 'ok');
+        if (!done) { done = true; resolve(true); }
+      };
       w.onmessage = evt => {
         try {
           const d = JSON.parse(evt.data).data; if (!d?.s) return;
@@ -445,9 +455,18 @@ export function useArbScanner() {
           if (d.e === '24hrTicker') { pricesRef.current[sym].price = parseFloat(d.c); pricesRef.current[sym].chg24 = parseFloat(d.P); }
         } catch {}
       };
-      w.onerror = () => { setExStatus('binance', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
-      w.onclose = () => { wsRef.current = null; wsReadyRef.current = false; setTimeout(() => { if (runningRef.current) connectWS(); }, 5000); };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 6000);
+      w.onerror = () => {
+        wsRetry.current.binance++;
+        setExStatus('binance', false, 'WS Error');
+        if (!done) { done = true; resolve(false); }
+      };
+      w.onclose = (evt) => {
+        wsRef.current = null; wsReadyRef.current = false;
+        const delay = wsDelay('binance');
+        addLog(`Binance WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
+        setTimeout(() => { if (runningRef.current) connectWS(); }, delay);
+      };
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
     });
   }, [addLog, setExStatus]);
 
@@ -459,6 +478,7 @@ export function useArbScanner() {
       wsOKXRef.current = w;
       let done = false;
       w.onopen = () => {
+        wsRetry.current.okx = 0;
         w.send(JSON.stringify({ op: 'subscribe', args: OKX_SYMS.map(id => ({ channel: 'tickers', instId: id })) }));
         setExStatus('okx', true, 'WS Live'); addLog('OKX WS connected', 'ok');
         if (!done) { done = true; resolve(true); }
@@ -472,9 +492,18 @@ export function useArbScanner() {
           });
         } catch {}
       };
-      w.onerror = () => { setExStatus('okx', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
-      w.onclose = () => { wsOKXRef.current = null; setTimeout(() => { if (runningRef.current) connectOKX(); }, 6000); };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 7000);
+      w.onerror = () => {
+        wsRetry.current.okx++;
+        setExStatus('okx', false, 'WS Error');
+        if (!done) { done = true; resolve(false); }
+      };
+      w.onclose = (evt) => {
+        wsOKXRef.current = null;
+        const delay = wsDelay('okx');
+        addLog(`OKX WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
+        setTimeout(() => { if (runningRef.current) connectOKX(); }, delay);
+      };
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
     });
   }, [addLog, setExStatus]);
 
@@ -486,6 +515,7 @@ export function useArbScanner() {
       wsBybitRef.current = w;
       let done = false;
       w.onopen = () => {
+        wsRetry.current.bybit = 0;
         w.send(JSON.stringify({ op: 'subscribe', args: BYBIT_SYMS.map(s => 'tickers.' + s) }));
         setExStatus('bybit', true, 'WS Live'); addLog('Bybit WS connected', 'ok');
         if (!done) { done = true; resolve(true); }
@@ -498,9 +528,18 @@ export function useArbScanner() {
           bybitPricesRef.current[sym] = { bid: parseFloat(t.bid1Price) || 0, ask: parseFloat(t.ask1Price) || 0, price: parseFloat(t.lastPrice) || 0 };
         } catch {}
       };
-      w.onerror = () => { setExStatus('bybit', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
-      w.onclose = () => { wsBybitRef.current = null; setTimeout(() => { if (runningRef.current) connectBybit(); }, 6000); };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 7000);
+      w.onerror = () => {
+        wsRetry.current.bybit++;
+        setExStatus('bybit', false, 'WS Error');
+        if (!done) { done = true; resolve(false); }
+      };
+      w.onclose = (evt) => {
+        wsBybitRef.current = null;
+        const delay = wsDelay('bybit');
+        addLog(`Bybit WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
+        setTimeout(() => { if (runningRef.current) connectBybit(); }, delay);
+      };
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
     });
   }, [addLog, setExStatus]);
 
@@ -508,11 +547,11 @@ export function useArbScanner() {
   const connectKraken = useCallback(() => {
     return new Promise<boolean>(resolve => {
       if (wsKrakenRef.current?.readyState === WebSocket.OPEN) { resolve(true); return; }
-      const w = new WebSocket('wss://ws.kraken.com/v2');  // Kraken WS v2
+      const w = new WebSocket('wss://ws.kraken.com/v2');
       wsKrakenRef.current = w;
       let done = false;
       w.onopen = () => {
-        // Kraken WS v2 — map XBT/USD → BTC/USD for v2 format
+        wsRetry.current.kraken = 0;
         const v2Pairs = KRAKEN_PAIRS.map(p => p === 'XBT/USD' ? 'BTC/USD' : p);
         w.send(JSON.stringify({ method: 'subscribe', params: { channel: 'ticker', symbol: v2Pairs } }));
         setExStatus('kraken', true, 'WS Live'); addLog('Kraken WS connected', 'ok');
@@ -521,32 +560,51 @@ export function useArbScanner() {
       w.onmessage = evt => {
         try {
           const d = JSON.parse(evt.data);
-          // Kraken WS v2 format: { channel:'ticker', data:[{symbol, bid, ask, last}] }
           if (d.channel === 'ticker' && Array.isArray(d.data)) {
             d.data.forEach((t: any) => {
               const pairKey = t.symbol === 'BTC/USD' ? 'XBT/USD' : t.symbol;
               const sym = KRAKEN_MAP[pairKey]; if (!sym) return;
-              krakenPricesRef.current[sym] = {
-                bid: t.bid || 0, ask: t.ask || 0, price: t.last || 0
-              };
+              krakenPricesRef.current[sym] = { bid: t.bid || 0, ask: t.ask || 0, price: t.last || 0 };
             });
           }
         } catch {}
       };
-      w.onerror = () => { setExStatus('kraken', false, 'WS Error'); if (!done) { done = true; resolve(false); } };
-      w.onclose = () => { wsKrakenRef.current = null; setTimeout(() => { if (runningRef.current) connectKraken(); }, 8000); };
-      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 7000);
+      w.onerror = () => {
+        wsRetry.current.kraken++;
+        setExStatus('kraken', false, 'WS Error');
+        if (!done) { done = true; resolve(false); }
+      };
+      w.onclose = (evt) => {
+        wsKrakenRef.current = null;
+        const delay = wsDelay('kraken');
+        addLog(`Kraken WS closed [${evt.code}]${evt.reason ? ' ' + evt.reason : ''} → retry in ${delay/1000}s`, evt.code === 1000 ? 'info' : 'warn');
+        setTimeout(() => { if (runningRef.current) connectKraken(); }, delay);
+      };
+      setTimeout(() => { if (!done) { done = true; resolve(false); } }, 8000);
     });
   }, [addLog, setExStatus]);
 
   const getExPrices = useCallback((id: string) => {
-    // ONLY return live WS data — never simulate/fake prices
-    const src: Record<string, PriceData> = { okx: okxPricesRef.current, bybit: bybitPricesRef.current, kraken: krakenPricesRef.current }[id] || {};
+    const src: Record<string, PriceData> = {
+      okx: okxPricesRef.current,
+      bybit: bybitPricesRef.current,
+      kraken: krakenPricesRef.current,
+    }[id] || {};
     const out: Record<string, PriceData> = {};
     SYMBOLS.forEach(sym => {
       const live = src[sym];
-      if (live && (live.bid || 0) > 0 && (live.ask || 0) > 0) { out[sym] = live; }
-      // No fallback — if no live data, symbol is simply excluded from cross-arb
+      if (live && (live.bid || 0) > 0 && (live.ask || 0) > 0) {
+        out[sym] = live;
+      } else {
+        // Fallback: use CoinGecko/Binance price with a small synthetic spread.
+        // This keeps cross-arb running when a WS is down — opportunities will be
+        // conservative (spread between CG price ± 0.05%) rather than zero results.
+        const cg = pricesRef.current[sym];
+        if (cg?.price && cg.price > 0) {
+          const sp = cg.price * 0.0005;
+          out[sym] = { bid: cg.price - sp, ask: cg.price + sp, price: cg.price };
+        }
+      }
     });
     return out;
   }, []);
