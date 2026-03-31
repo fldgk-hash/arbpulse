@@ -683,35 +683,39 @@ export function useArbScanner() {
           if (first !== undefined) knownPairs.current.delete(first);
         }
       }
-      // Show as "new" based on pair creation time, not our first-sight time
-      // This means newly created pairs (< 24h old on-chain) always show up in NEW tab
+      // NEW TAB: show every pair we haven't seen before in this session.
+      // Do NOT gate on isNew(pairAge) — BSC established tokens (WBNB, CAKE)
+      // have valid pairCreatedAt from years ago → isNew()=false → 0 BSC entries.
+      // The NewTokensView age filters (1h / 6h / 24h / ALL) let users slice by recency.
+      // For display: if on-chain age > 24h, show seenAt ("just appeared in scan")
+      // so old tokens that are new-to-us don't show confusing ages like "2y".
       const pairAge = parsePairTimestamp(pair.pairCreatedAt);
-          // Use seenAt as fallback so all new pairs show in NEW tab
-          if (!alreadyNew && (isNew(pairAge) || pairAge === null)) {
-          newFound++;
-          const addr = pair.baseToken?.address || '';
-          const dex = pair.dexId || 'unknown';
-          const dexCount = tokenDexMap[addr]?.size || 1;
-          const entry: NewPairEntry = {
-            id: pair.pairAddress,
-            chain,
-            symbol: pair.baseToken?.symbol || '?',
-            name: pair.baseToken?.name || '',
-            mint: addr,
-            pairAddr: pair.pairAddress,
-            dex,
-            price: parseFloat(pair.priceUsd || 0),
-            liq: pair.liquidity?.usd || 0,
-            vol: pair.volume?.h24 || 0,
-            createdAt: pairAge,
-            seenAt,
-            hasMultiDex: dexCount >= 2,
-            arbSpread: null,   // filled in after fetchPairs completes
-            safety: null,
-          };
-          // Prepend — newest first
-          newPairsRef.current = [entry, ...newPairsRef.current].slice(0, 200);
-        }
+      const displayAge = (pairAge !== null && isNew(pairAge)) ? pairAge : null; // null → seenAt used in UI
+      if (!alreadyNew) {
+        newFound++;
+        const addr = pair.baseToken?.address || '';
+        const dex = pair.dexId || 'unknown';
+        const dexCount = tokenDexMap[addr]?.size || 1;
+        const entry: NewPairEntry = {
+          id: pair.pairAddress,
+          chain,
+          symbol: pair.baseToken?.symbol || '?',
+          name: pair.baseToken?.name || '',
+          mint: addr,
+          pairAddr: pair.pairAddress,
+          dex,
+          price: parseFloat(pair.priceUsd || 0),
+          liq: pair.liquidity?.usd || 0,
+          vol: pair.volume?.h24 || 0,
+          createdAt: displayAge,
+          seenAt,
+          hasMultiDex: dexCount >= 2,
+          arbSpread: null,
+          safety: null,
+        };
+        // Prepend — newest first; cap at 500 so list doesn't grow unbounded
+        newPairsRef.current = [entry, ...newPairsRef.current].slice(0, 500);
+      }
     });
     if (newFound > 0) {
       if (soundOnRef.current) beep(1100, 0.08);
