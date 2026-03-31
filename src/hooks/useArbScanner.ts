@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 // ═══════════════════════════════════════════════════════════════
-// useArbScanner.ts — v5.1 (CEO audit)
+// useArbScanner.ts — v4.1 (2026-03-30)
 // Fixes applied from CRITICAL BSC ARBITRAGE ISSUES REPORT:
 //   #1 ✅ fetchSafety() added to scanBsc()
 //   #2 ✅ BSC + CEX timers restart on interval change
@@ -103,7 +103,7 @@ export const BSC_KNOWN_MULTI_DEX = [
 // Slippage constants — chain-specific
 // BSC: liquid pairs on major DEXes, $1k trade → ~0.05% slippage
 // Solana: realistic for $1k on Raydium/Orca pools → 0.2% (was 0.5% — too aggressive, killed all opps)
-const SOL_SLIP = 0.001; // 0.1% — realistic for $1k on Raydium/Orca/Meteora
+const SOL_SLIP = 0.002;
 const BSC_SLIP = 0.0005;
 
 const TRIPS = [
@@ -323,7 +323,7 @@ export function useArbScanner() {
   const [filters, setFilters] = useState<ScannerFilters>({
     minSpread: 0.04, minProfit: 0.5, tradeSize: 1000,
     alertThreshold: 0.5, showTri: true, showCross: true, autoRefresh: true,
-    dexMinLiq: 1000, dexMinVol: 200, dexMinSpread: 0.05,
+    dexMinLiq: 1000, dexMinVol: 200, dexMinSpread: 0.1,
     dexSafeOnly: true, dexNewOnly: false, dexSort: 'spread',
     dexChain: 'solana',
     cexInterval: 25, dexInterval: 20,
@@ -551,40 +551,18 @@ export function useArbScanner() {
     return out;
   }, []);
 
-  // ═══ SAFETY: Solana → RugCheck  |  BSC → GoPlus Security API ═══
+  // ═══ RUGCHECK SAFETY ═══
   const fetchSafety = useCallback(async (mint: string): Promise<SafetyResult | null> => {
     if (!mint) return null;
     if (safeCache.current[mint] !== undefined) return safeCache.current[mint];
-    const isBsc = /^0x[0-9a-fA-F]{40}$/.test(mint);
     try {
-      if (isBsc) {
-        // GoPlus Security — free, no API key, supports BSC chain ID 56
-        const r = await fetch(`https://api.gopluslabs.io/api/v1/token_security/56?contract_addresses=${mint}`,
-          { signal: AbortSignal.timeout(6000) });
-        if (!r.ok) throw new Error('GoPlus ' + r.status);
-        const d = await r.json();
-        const res = d.result?.[mint.toLowerCase()];
-        if (!res) throw new Error('no data');
-        const risks: string[] = [];
-        if (res.is_honeypot === '1')      risks.push('Honeypot');
-        if (res.is_blacklisted === '1')   risks.push('Blacklisted');
-        if (res.is_mintable === '1')      risks.push('Mintable');
-        if (res.cannot_sell_all === '1')  risks.push('Cannot sell all');
-        if (parseFloat(res.buy_tax  || '0') > 0.05) risks.push(`Buy tax ${(parseFloat(res.buy_tax)*100).toFixed(0)}%`);
-        if (parseFloat(res.sell_tax || '0') > 0.05) risks.push(`Sell tax ${(parseFloat(res.sell_tax)*100).toFixed(0)}%`);
-        const score = res.is_honeypot === '1' ? 1000 : Math.min(900, risks.length * 200);
-        const result: SafetyResult = { score, risks: risks.slice(0, 3), ok: score === 0 };
-        safeCache.current[mint] = result; return result;
-      } else {
-        const r = await fetch(`https://api.rugcheck.xyz/v1/tokens/${mint}/report/summary`,
-          { signal: AbortSignal.timeout(5000) });
-        if (!r.ok) throw new Error('' + r.status);
-        const d = await r.json();
-        const score = d.score || 0;
-        const risks = (d.risks || []).map((x: any) => x.name || x.description || '').filter(Boolean).slice(0, 3);
-        const res: SafetyResult = { score, risks, ok: score < 500 };
-        safeCache.current[mint] = res; return res;
-      }
+      const r = await fetch(`https://api.rugcheck.xyz/v1/tokens/${mint}/report/summary`, { signal: AbortSignal.timeout(5000) });
+      if (!r.ok) throw new Error('' + r.status);
+      const d = await r.json();
+      const score = d.score || 0;
+      const risks = (d.risks || []).map((x: any) => x.name || x.description || '').filter(Boolean).slice(0, 3);
+      const res: SafetyResult = { score, risks, ok: score < 500 };
+      safeCache.current[mint] = res; return res;
     } catch { safeCache.current[mint] = null; return null; }
   }, []);
 
@@ -602,30 +580,19 @@ export function useArbScanner() {
   }, [addLog]);
 
   const getTrending = useCallback(async (): Promise<string[]> => {
+    const [boosts, profiles, newPairs] = await Promise.allSettled([
+      fetchDSEndpoint('https://api.dexscreener.com/token-boosts/top/v1', 'boosts', (t: any) => t.chainId === 'solana' && t.tokenAddress),
+      fetchDSEndpoint('https://api.dexscreener.com/token-profiles/latest/v1', 'profiles', (t: any) => t.chainId === 'solana' && t.tokenAddress),
+      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=sol', 'search-sol', (t: any) => t.chainId === 'solana' && t.baseToken?.address),
+    ]);
     const seen = new Set<string>();
     const all: string[] = [];
-    const add = (a: string) => { if (a && !seen.has(a)) { seen.add(a); all.push(a); } };
-
-    // KNOWN tokens first — highest multi-DEX hit rate
-    KNOWN_MULTI_DEX.forEach(add);
-
-    const [boosts, profiles, raySearch, metSearch] = await Promise.allSettled([
-      fetchDSEndpoint('https://api.dexscreener.com/token-boosts/top/v1', 'boosts',
-        (t: any) => t.chainId === 'solana' && t.tokenAddress),
-      fetchDSEndpoint('https://api.dexscreener.com/token-profiles/latest/v1', 'profiles',
-        (t: any) => t.chainId === 'solana' && t.tokenAddress),
-      // Raydium-specific: tokens on Raydium likely also on Orca/Meteora
-      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=raydium+SOL', 'search-ray',
-        (t: any) => t.chainId === 'solana' && t.baseToken?.address && (t.liquidity?.usd || 0) > 3000),
-      // Meteora DLMM pools — different pricing model → real spreads vs Raydium
-      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=meteora+DLMM', 'search-met',
-        (t: any) => t.chainId === 'solana' && t.baseToken?.address && (t.liquidity?.usd || 0) > 3000),
-    ]);
-    for (const res of [boosts, profiles, raySearch, metSearch]) {
-      if (res.status === 'fulfilled') res.value.forEach(add);
+    for (const res of [boosts, profiles, newPairs]) {
+      if (res.status === 'fulfilled') res.value.forEach(a => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
     }
+    KNOWN_MULTI_DEX.forEach(a => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
     addLog(`Total unique Solana tokens: ${all.length}`, 'info');
-    return all.slice(0, 60);
+    return all.slice(0, 45);
   }, [fetchDSEndpoint, addLog]);
 
   const fetchPairs = useCallback(async (addresses: string[], chain: 'solana' | 'bsc' = 'solana'): Promise<DexOpp[]> => {
@@ -873,80 +840,50 @@ export function useArbScanner() {
   const getBscTrending = useCallback(async (): Promise<string[]> => {
     const seen = new Set<string>();
     const all: string[] = [];
-    const add = (a: string) => { if (a && !seen.has(a)) { seen.add(a); all.push(a); } };
+    const add = (addr: string) => { if (addr && !seen.has(addr)) { seen.add(addr); all.push(addr); } };
 
-    // 1. Known multi-DEX tokens first — guaranteed 2+ pool coverage
+    // 1. KNOWN multi-DEX tokens — always first (these reliably have pairs on PancakeSwap, Biswap, THENA, etc.)
     BSC_KNOWN_MULTI_DEX.forEach(add);
 
-    // 2. Live discovery via DexScreener — strictly chainId=bsc
-    const results = await Promise.allSettled([
-      // Boosted BSC tokens (paid promotions → usually active + multi-pool)
+    // 2. Use BSC-specific DexScreener endpoints that actually return BSC pairs
+    //    NOTE: search queries like "WBNB" return Solana/ETH wrapped versions, NOT BSC pairs.
+    //    Instead, use token-boosts/profiles filtered to BSC, and pairs endpoint by chain.
+    const searches = await Promise.allSettled([
+      // Token boosts — BSC tokens getting promoted
+      // DexScreener uses 'bsc' internally but some API versions return 'binance-smart-chain'
       fetchDSEndpoint(
         'https://api.dexscreener.com/token-boosts/top/v1',
         'bsc-boosts',
         (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
       ),
-      // Latest BSC token profiles (new launches)
+      // Token profiles — recently created BSC token profiles
       fetchDSEndpoint(
         'https://api.dexscreener.com/token-profiles/latest/v1',
         'bsc-profiles',
         (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
       ),
-      // BNB-quoted pairs → liquid PancakeSwap/Biswap tokens
+      // Use pairs endpoint filtered by BSC chain — search for major quote tokens
       fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=BNB',
-        'bsc-bnb',
+        'https://api.dexscreener.com/latest/dex/pairs/bsc/0x16b9a82891338f9bA80E2D6970FddA79D1eb0daE,0x172fcD41E0913e95784454622d1c3724f546f849,0x58F876857a02D6762E0101bb5C46A8c1ED44Dc16,0x7EFaEf62fDdCCa950418312c6C91Aef321375A00,0x0eD7e52944161450477ee417DE9Cd3a859b14fD0',
+        'bsc-pairs-1',
         (t: any) => t.chainId === 'bsc' && t.baseToken?.address
-          && (t.liquidity?.usd || 0) > 10000
-          && t.quoteToken?.symbol === 'WBNB'
       ),
-      // USDT-quoted pairs on BSC — stablecoins appear on multiple DEXes
+      // More popular BSC pairs (PancakeSwap V3 pools)
       fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=USDT',
-        'bsc-usdt',
+        'https://api.dexscreener.com/latest/dex/pairs/bsc/0x36696169C63e42cd08ce11f5deeBbCeBae652050,0x92b7807bF19b7DDdf89b706143896d05228f3121,0x7f51c8AaA6B0599aBd16674e2b17FEc7a9f674A1',
+        'bsc-pairs-2',
         (t: any) => t.chainId === 'bsc' && t.baseToken?.address
-          && (t.liquidity?.usd || 0) > 5000
       ),
-      // BUSD pairs — still active on Biswap / old PCS pools
-      fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=BUSD',
-        'bsc-busd',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address
-          && (t.liquidity?.usd || 0) > 5000
-      ),
-      // token-pairs/v1 for core tokens → discovers ALL their pools directly
-      (async (): Promise<string[]> => {
-        const core = BSC_KNOWN_MULTI_DEX.slice(0, 6);
-        const addrs: string[] = [];
-        await Promise.all(core.map(async addr => {
-          try {
-            const r = await fetch(`https://api.dexscreener.com/token-pairs/v1/bsc/${addr}`,
-              { signal: AbortSignal.timeout(6000) });
-            if (!r.ok) return;
-            const d = await r.json();
-            const pairs = Array.isArray(d) ? d : (d.pairs || []);
-            pairs.forEach((p: any) => {
-              if (p.baseToken?.address)  addrs.push(p.baseToken.address);
-              if (p.quoteToken?.address) addrs.push(p.quoteToken.address);
-            });
-          } catch {}
-        }));
-        addLog(`DS bsc-token-pairs: ${addrs.length} addresses`, 'info');
-        return addrs;
-      })(),
     ]);
-
-    results.forEach(r => {
-      if (r.status === 'fulfilled') {
-        (Array.isArray(r.value) ? r.value : []).forEach((a: string) => add(a));
-      }
+    searches.forEach(res => {
+      if (res.status === 'fulfilled') res.value.forEach((a: string) => add(a));
     });
 
     addLog(`BSC trending: ${all.length} unique tokens queued`, 'info');
     return all.slice(0, 60);
   }, [fetchDSEndpoint, addLog]);
 
-    // ═══ SCAN BSC ═══
+  // ═══ SCAN BSC ═══
   const scanBsc = useCallback(async () => {
     setState(prev => ({ ...prev, bscScanning: true, bscStatus: 'scanning...' }));
     const addrs = await getBscTrending();
@@ -1183,7 +1120,7 @@ export function useArbScanner() {
 
   // ═══ BOOT ═══
   useEffect(() => {
-    addLog('ArbPulse Pro v5.1 — CEO audit: BSC trending + SOL slip + safety fixed', 'ok');
+    addLog('ArbPulse Pro v9.0 — Solana + BSC DEX · CEX multi-exchange scanner', 'ok');
     addLog('Chains: Solana · BNB Smart Chain · Safety: RugCheck.xyz · CEX: 4x WS', 'info');
 
     // Connect all WS — done ONCE here, never re-created inside runCexScan
