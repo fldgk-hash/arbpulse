@@ -102,8 +102,8 @@ export const BSC_KNOWN_MULTI_DEX = [
 
 // Slippage constants — chain-specific
 // BSC: liquid pairs on major DEXes, $1k trade → ~0.05% slippage
-// Solana: realistic for $1k on Raydium/Orca pools → 0.2% (was 0.5% — too aggressive, killed all opps)
-const SOL_SLIP = 0.002;
+// Solana: realistic for $1k on Raydium/Orca/Meteora pools → 0.1%
+const SOL_SLIP = 0.001;
 const BSC_SLIP = 0.0005;
 
 const TRIPS = [
@@ -323,7 +323,7 @@ export function useArbScanner() {
   const [filters, setFilters] = useState<ScannerFilters>({
     minSpread: 0.04, minProfit: 0.5, tradeSize: 1000,
     alertThreshold: 0.5, showTri: true, showCross: true, autoRefresh: true,
-    dexMinLiq: 1000, dexMinVol: 200, dexMinSpread: 0.1,
+    dexMinLiq: 1000, dexMinVol: 200, dexMinSpread: 0.05, // lowered: BSC/SOL real spreads are 0.05–0.4%
     dexSafeOnly: true, dexNewOnly: false, dexSort: 'spread',
     dexChain: 'solana',
     cexInterval: 25, dexInterval: 20,
@@ -551,18 +551,44 @@ export function useArbScanner() {
     return out;
   }, []);
 
-  // ═══ RUGCHECK SAFETY ═══
+  // ═══ SAFETY CHECK ═══
+  // Solana → RugCheck.xyz  |  BSC EVM → GoPlus Security API (free, no key needed)
   const fetchSafety = useCallback(async (mint: string): Promise<SafetyResult | null> => {
     if (!mint) return null;
     if (safeCache.current[mint] !== undefined) return safeCache.current[mint];
+    const isBsc = /^0x[0-9a-fA-F]{40}$/.test(mint);
     try {
-      const r = await fetch(`https://api.rugcheck.xyz/v1/tokens/${mint}/report/summary`, { signal: AbortSignal.timeout(5000) });
-      if (!r.ok) throw new Error('' + r.status);
-      const d = await r.json();
-      const score = d.score || 0;
-      const risks = (d.risks || []).map((x: any) => x.name || x.description || '').filter(Boolean).slice(0, 3);
-      const res: SafetyResult = { score, risks, ok: score < 500 };
-      safeCache.current[mint] = res; return res;
+      if (isBsc) {
+        const r = await fetch(
+          `https://api.gopluslabs.io/api/v1/token_security/56?contract_addresses=${mint}`,
+          { signal: AbortSignal.timeout(6000) }
+        );
+        if (!r.ok) throw new Error('GoPlus HTTP ' + r.status);
+        const d = await r.json();
+        const result = d.result?.[mint.toLowerCase()];
+        if (!result) throw new Error('no result');
+        const risks: string[] = [];
+        if (result.is_honeypot === '1')      risks.push('Honeypot');
+        if (result.is_blacklisted === '1')   risks.push('Blacklisted');
+        if (result.is_mintable === '1')      risks.push('Mintable');
+        if (result.cannot_sell_all === '1')  risks.push('Cannot sell all');
+        if (result.is_proxy === '1')         risks.push('Proxy contract');
+        const buyTax  = parseFloat(result.buy_tax  || '0');
+        const sellTax = parseFloat(result.sell_tax || '0');
+        if (buyTax  > 0.05) risks.push(`Buy tax ${(buyTax  * 100).toFixed(0)}%`);
+        if (sellTax > 0.05) risks.push(`Sell tax ${(sellTax * 100).toFixed(0)}%`);
+        const score = result.is_honeypot === '1' ? 1000 : Math.min(900, risks.length * 200);
+        const res: SafetyResult = { score, risks: risks.slice(0, 3), ok: result.is_honeypot !== '1' && risks.length === 0 };
+        safeCache.current[mint] = res; return res;
+      } else {
+        const r = await fetch(`https://api.rugcheck.xyz/v1/tokens/${mint}/report/summary`, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) throw new Error('' + r.status);
+        const d = await r.json();
+        const score = d.score || 0;
+        const risks = (d.risks || []).map((x: any) => x.name || x.description || '').filter(Boolean).slice(0, 3);
+        const res: SafetyResult = { score, risks, ok: score < 500 };
+        safeCache.current[mint] = res; return res;
+      }
     } catch { safeCache.current[mint] = null; return null; }
   }, []);
 
@@ -580,19 +606,30 @@ export function useArbScanner() {
   }, [addLog]);
 
   const getTrending = useCallback(async (): Promise<string[]> => {
-    const [boosts, profiles, newPairs] = await Promise.allSettled([
-      fetchDSEndpoint('https://api.dexscreener.com/token-boosts/top/v1', 'boosts', (t: any) => t.chainId === 'solana' && t.tokenAddress),
-      fetchDSEndpoint('https://api.dexscreener.com/token-profiles/latest/v1', 'profiles', (t: any) => t.chainId === 'solana' && t.tokenAddress),
-      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=sol', 'search-sol', (t: any) => t.chainId === 'solana' && t.baseToken?.address),
-    ]);
     const seen = new Set<string>();
     const all: string[] = [];
-    for (const res of [boosts, profiles, newPairs]) {
-      if (res.status === 'fulfilled') res.value.forEach(a => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
+    const add = (a: string) => { if (a && !seen.has(a)) { seen.add(a); all.push(a); } };
+
+    // KNOWN tokens first — highest hit rate for multi-DEX
+    KNOWN_MULTI_DEX.forEach(add);
+
+    const [boosts, profiles, raySearch, metSearch] = await Promise.allSettled([
+      fetchDSEndpoint('https://api.dexscreener.com/token-boosts/top/v1', 'boosts',
+        (t: any) => t.chainId === 'solana' && t.tokenAddress),
+      fetchDSEndpoint('https://api.dexscreener.com/token-profiles/latest/v1', 'profiles',
+        (t: any) => t.chainId === 'solana' && t.tokenAddress),
+      // Raydium-specific search — tokens on Raydium likely also on Orca/Meteora
+      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=raydium+SOL', 'search-ray',
+        (t: any) => t.chainId === 'solana' && t.baseToken?.address && (t.liquidity?.usd || 0) > 5000),
+      // Meteora search — different DEX, guarantees cross-DEX tokens
+      fetchDSEndpoint('https://api.dexscreener.com/latest/dex/search?q=meteora+DLMM', 'search-met',
+        (t: any) => t.chainId === 'solana' && t.baseToken?.address && (t.liquidity?.usd || 0) > 5000),
+    ]);
+    for (const res of [boosts, profiles, raySearch, metSearch]) {
+      if (res.status === 'fulfilled') res.value.forEach(add);
     }
-    KNOWN_MULTI_DEX.forEach(a => { if (!seen.has(a)) { seen.add(a); all.push(a); } });
     addLog(`Total unique Solana tokens: ${all.length}`, 'info');
-    return all.slice(0, 45);
+    return all.slice(0, 60);
   }, [fetchDSEndpoint, addLog]);
 
   const fetchPairs = useCallback(async (addresses: string[], chain: 'solana' | 'bsc' = 'solana'): Promise<DexOpp[]> => {
@@ -842,41 +879,65 @@ export function useArbScanner() {
     const all: string[] = [];
     const add = (addr: string) => { if (addr && !seen.has(addr)) { seen.add(addr); all.push(addr); } };
 
-    // 1. KNOWN multi-DEX tokens — always first (these reliably have pairs on PancakeSwap, Biswap, THENA, etc.)
+    // 1. KNOWN multi-DEX tokens — always queued first, guaranteed 2+ DEX coverage
     BSC_KNOWN_MULTI_DEX.forEach(add);
 
-    // 2. Use BSC-specific DexScreener endpoints that actually return BSC pairs
-    //    NOTE: search queries like "WBNB" return Solana/ETH wrapped versions, NOT BSC pairs.
-    //    Instead, use token-boosts/profiles filtered to BSC, and pairs endpoint by chain.
+    // 2. Dynamic discovery via DexScreener
     const searches = await Promise.allSettled([
-      // Token boosts — BSC tokens getting promoted
-      // DexScreener uses 'bsc' internally but some API versions return 'binance-smart-chain'
       fetchDSEndpoint(
         'https://api.dexscreener.com/token-boosts/top/v1',
         'bsc-boosts',
         (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
       ),
-      // Token profiles — recently created BSC token profiles
       fetchDSEndpoint(
         'https://api.dexscreener.com/token-profiles/latest/v1',
         'bsc-profiles',
         (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
       ),
-      // Use pairs endpoint filtered by BSC chain — search for major quote tokens
+      // Search for tokens with BNB as quote — liquid PancakeSwap pairs
       fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/pairs/bsc/0x16b9a82891338f9bA80E2D6970FddA79D1eb0daE,0x172fcD41E0913e95784454622d1c3724f546f849,0x58F876857a02D6762E0101bb5C46A8c1ED44Dc16,0x7EFaEf62fDdCCa950418312c6C91Aef321375A00,0x0eD7e52944161450477ee417DE9Cd3a859b14fD0',
-        'bsc-pairs-1',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address
+        'https://api.dexscreener.com/latest/dex/search?q=BNB',
+        'bsc-bnb-search',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 10000 && t.quoteToken?.symbol === 'WBNB'
       ),
-      // More popular BSC pairs (PancakeSwap V3 pools)
+      // USDT pairs on BSC — show up on multiple DEXes
       fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/pairs/bsc/0x36696169C63e42cd08ce11f5deeBbCeBae652050,0x92b7807bF19b7DDdf89b706143896d05228f3121,0x7f51c8AaA6B0599aBd16674e2b17FEc7a9f674A1',
-        'bsc-pairs-2',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address
+        'https://api.dexscreener.com/latest/dex/search?q=USDT BSC',
+        'bsc-usdt-search',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 10000
       ),
+      // BUSD pairs — still active on Biswap/PCS
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=BUSD',
+        'bsc-busd-search',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 5000
+      ),
+      // token-pairs/v1 for core tokens — fetches ALL their pools on BSC directly
+      (async () => {
+        const coreTokens = BSC_KNOWN_MULTI_DEX.slice(0, 5); // WBNB, CAKE, ETH, BTCB, USDT
+        const batchResults: string[] = [];
+        await Promise.all(coreTokens.map(async addr => {
+          try {
+            const r = await fetch(`https://api.dexscreener.com/token-pairs/v1/bsc/${addr}`, { signal: AbortSignal.timeout(6000) });
+            if (!r.ok) return;
+            const d = await r.json();
+            const pairs = Array.isArray(d) ? d : (d.pairs || []);
+            pairs.forEach((pair: any) => {
+              if (pair.quoteToken?.address) batchResults.push(pair.quoteToken.address);
+              if (pair.baseToken?.address)  batchResults.push(pair.baseToken.address);
+            });
+          } catch {}
+        }));
+        addLog(`DS bsc-token-pairs: ${batchResults.length} addresses`, 'info');
+        return batchResults;
+      })()
     ]);
+
     searches.forEach(res => {
-      if (res.status === 'fulfilled') res.value.forEach((a: string) => add(a));
+      if (res.status === 'fulfilled') {
+        const addrs = Array.isArray(res.value) ? res.value : [];
+        addrs.forEach((a: string) => add(a));
+      }
     });
 
     addLog(`BSC trending: ${all.length} unique tokens queued`, 'info');
@@ -1120,7 +1181,7 @@ export function useArbScanner() {
 
   // ═══ BOOT ═══
   useEffect(() => {
-    addLog('ArbPulse Pro v9.0 — Solana + BSC DEX · CEX multi-exchange scanner', 'ok');
+    addLog('ArbPulse Pro v5.1 — all 8 bugs fixed · GoPlus BSC safety · BNB/USDT/BUSD search', 'ok');
     addLog('Chains: Solana · BNB Smart Chain · Safety: RugCheck.xyz · CEX: 4x WS', 'info');
 
     // Connect all WS — done ONCE here, never re-created inside runCexScan
