@@ -321,17 +321,17 @@ export function useArbScanner() {
   });
 
   const [filters, setFilters] = useState<ScannerFilters>({
-    minSpread: 0.028, minProfit: 20, tradeSize: 800,
-    alertThreshold: 0.45, showTri: true, showCross: true, autoRefresh: true,
+    minSpread: 0.024, minProfit: 18, tradeSize: 800,
+    alertThreshold: 0.4, showTri: true, showCross: true, autoRefresh: true,
     // Early Pump Detector defaults — optimised for Raydium-migrated tokens
     dexMinLiq: 14000,       // $14k+ — catches early pools before they're crowded
-    dexMinVol: 45000,       // $45k+ 24h vol — real activity, not ghost pools
-    dexMinSpread: 0.028,    // 2.8%+ net spread after fees
+    dexMinVol: 28000,       // $45k+ 24h vol — real activity, not ghost pools
+    dexMinSpread: 0.024,    // 2.8%+ net spread after fees
     dexSafeOnly: false,     // Off — early pumps often have intermediate RugCheck scores
     dexNewOnly: true,       // ON — only tokens < MAX_PAIR_AGE_HOURS old
     dexSort: 'profit',
     dexChain: 'solana',
-    cexInterval: 25, dexInterval: 16, // 16s DEX refresh for faster early detection
+    cexInterval: 25, dexInterval: 15, // 16s DEX refresh for faster early detection
   });
 
   const pricesRef = useRef<Record<string, PriceData>>({});
