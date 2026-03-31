@@ -1028,13 +1028,17 @@ export function useArbScanner() {
   // auto-refresh whenever runCexScan is recreated due to dependency changes.
   const schedCexRef = useRef<() => void>(() => {});
   useEffect(() => {
-    if (!dexTimerRef.current && !bscTimerRef.current) return; // Not yet booted
+    if (!dexTimerRef.current && !bscTimerRef.current) return;
     if (dexTimerRef.current) clearInterval(dexTimerRef.current);
     if (bscTimerRef.current) clearInterval(bscTimerRef.current);
     const iv = (filtersRef.current.dexInterval || 20) * 1000;
-    dexTimerRef.current = setInterval(() => { if (runningRef.current) scanDex(); }, iv);
-    bscTimerRef.current = setInterval(() => { if (runningRef.current) scanBsc(); }, Math.max(30000, iv + 10000));
-  }, [filters.dexInterval]); // eslint-disable-line react-hooks/exhaustive-deps
+    dexTimerRef.current = setInterval(() => {
+      if (runningRef.current) scanDex();
+    }, iv);
+    bscTimerRef.current = setInterval(() => {
+      if (runningRef.current) scanBsc();
+    }, Math.max(30000, iv + 10000));
+  }, [filters.dexInterval, scanDex, scanBsc]);
 
   const schedCex = useCallback(() => {
     if (!filtersRef.current.autoRefresh || !runningRef.current) return;
