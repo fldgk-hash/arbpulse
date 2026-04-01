@@ -1,5 +1,5 @@
-import { memo, useCallback, useState } from 'react';
-import type { DexOpp, ScannerFilters, SafetyResult } from '@/hooks/useArbScanner';
+import { memo, useCallback, useState, useMemo } from 'react';
+import type { DexOpp, ScannerFilters, LogEntry } from '@/hooks/useArbScanner';
 import { fmtPrice, fmtVol, fmtAge, LOW_LIQ_THRESHOLD } from '@/hooks/useArbScanner';
 
 interface DexViewProps {
@@ -19,9 +19,10 @@ interface DexViewProps {
   onRefilter: () => void;
   onLogOpp: (opp: DexOpp) => void;
   onCalc: (opp: DexOpp) => void;
+  logs: LogEntry[];   // for real-time diagnostics in empty state
 }
 
-export const DexView = memo(({ opps, scanning, status, onScan, bscOpps, bscScanning, bscStatus, onBscScan, filters, setFilters, onRefilter, onLogOpp, onCalc }: DexViewProps) => {
+export const DexView = memo(({ opps, scanning, status, onScan, bscOpps, bscScanning, bscStatus, onBscScan, filters, setFilters, onRefilter, onLogOpp, onCalc, logs }: DexViewProps) => {
   const [chain, setChain] = useState<'solana' | 'bsc'>('solana');
 
   const updateFilter = useCallback((key: keyof ScannerFilters, value: any) => {
@@ -33,6 +34,17 @@ export const DexView = memo(({ opps, scanning, status, onScan, bscOpps, bscScann
   const activeScanning = chain === 'solana' ? scanning : bscScanning;
   const activeStatus = chain === 'solana' ? status : bscStatus;
   const activeScan = chain === 'solana' ? onScan : onBscScan;
+
+  // Extract last spread telemetry from logs for smart empty-state diagnostics
+  const spreadInfo = useMemo(() => {
+    const prefix = chain === 'solana' ? 'SOLANA best raw spread:' : 'BSC best raw spread:';
+    const entry = [...logs].reverse().find(l => l.msg.startsWith(prefix));
+    if (!entry) return null;
+    // "SOLANA best raw spread: 0.048% (fees+slip threshold ~0.70%)"
+    const rawMatch = entry.msg.match(/([\d.]+)%\s*\(fees\+slip threshold ~([\d.]+)%\)/);
+    if (!rawMatch) return null;
+    return { raw: parseFloat(rawMatch[1]), threshold: parseFloat(rawMatch[2]) };
+  }, [logs, chain]);
 
   return (
     <div className="flex flex-col gap-2 p-2.5 overflow-y-auto flex-1 bg-arb-bg">
@@ -104,12 +116,45 @@ export const DexView = memo(({ opps, scanning, status, onScan, bscOpps, bscScann
           Fetching live {chain === 'solana' ? 'Solana' : 'BNB Smart Chain'} DEX pairs…
         </div>
       ) : activeOpps.length === 0 ? (
-        <div className="text-center py-8 text-arb-muted text-[11px] leading-relaxed">
-          🔍 No opportunities above filters.<br /><br />
-          <span className="text-arb-amber">Try:</span><br />
-          • Lower Min Liquidity → $500<br />
-          • Lower Min Spread → 0.05%<br />
-          • Uncheck "Safe only"
+        <div className="text-center py-6 text-arb-muted text-[11px] leading-relaxed px-4">
+          {spreadInfo ? (
+            // Real spread telemetry available — show actual market diagnosis
+            <div className="flex flex-col gap-2">
+              <div className="text-[13px] font-mono text-arb-amber">📉 Market is tight</div>
+              <div className="bg-arb-bg2 border border-arb-border rounded-md p-3 text-left font-mono text-[10px] space-y-1.5">
+                <div className="flex justify-between">
+                  <span className="text-arb-muted">Best raw spread</span>
+                  <span className={spreadInfo.raw < spreadInfo.threshold * 0.5 ? 'text-arb-red font-bold' : 'text-arb-amber font-bold'}>
+                    {spreadInfo.raw.toFixed(3)}%
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-arb-muted">Break-even (fees+slip)</span>
+                  <span className="text-arb-muted">{spreadInfo.threshold.toFixed(2)}%</span>
+                </div>
+                <div className="h-[1px] bg-arb-border" />
+                <div className="flex justify-between">
+                  <span className="text-arb-muted">Gap to profitability</span>
+                  <span className="text-arb-red font-bold">−{(spreadInfo.threshold - spreadInfo.raw).toFixed(3)}%</span>
+                </div>
+              </div>
+              <div className="text-[9px] text-arb-muted mt-1">
+                Market needs to widen <strong className="text-arb-amber">{(spreadInfo.threshold / spreadInfo.raw).toFixed(0)}×</strong> before any opp clears fees.
+                {filters.dexNewOnly && <span className="block mt-1 text-arb-cyan">💡 "New only" is ON — turn it OFF to scan all tokens.</span>}
+                {filters.dexMinVol > 10000 && <span className="block mt-1 text-arb-cyan">💡 Lower Vol filter to $5k to see more tokens.</span>}
+              </div>
+            </div>
+          ) : (
+            // No telemetry yet — generic hints
+            <div className="flex flex-col gap-1">
+              <div>🔍 No opportunities above filters.</div>
+              <div className="text-arb-amber mt-2">Try:</div>
+              <div>• Turn off "New only"</div>
+              <div>• Lower Min Vol → $5,000</div>
+              <div>• Lower Min Spread → 0.05%</div>
+              <div>• Lower Min Profit → $0.50</div>
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex flex-col gap-2 flex-1">

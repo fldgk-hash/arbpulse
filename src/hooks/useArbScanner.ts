@@ -323,18 +323,19 @@ export function useArbScanner() {
   });
 
   const [filters, setFilters] = useState<ScannerFilters>({
-    minSpread: 0.028, minProfit: 20, tradeSize: 800,
-    alertThreshold: 0.45, showTri: true, showCross: true, autoRefresh: true,
-    // Early Pump Detector defaults — optimised for Raydium-migrated tokens
-    dexMinLiq: 14000,       // $14k+ — catches early pools before they're crowded
-    dexMinVol: 45000,       // $45k+ 24h vol — real activity, not ghost pools
-    dexMinSpread: 0.028,    // 2.8%+ net spread after fees
-    dexSafeOnly: false,     // Off — early pumps often have intermediate RugCheck scores
-    dexNewOnly: true,       // ON — only tokens < MAX_PAIR_AGE_HOURS old
-    dexSort: 'profit',
+    minSpread: 0.04, minProfit: 0.5, tradeSize: 1000,
+    alertThreshold: 0.4, showTri: true, showCross: true, autoRefresh: true,
+    // Sane defaults — wide enough to show real opps, not zero results
+    // User can tighten via sidebar (Vol/MC slider, dexNewOnly for pump hunting)
+    dexMinLiq: 10000,
+    dexMinVol: 5000,
+    dexMinSpread: 0.05,     // 0.05% net spread — realistic after SOL fees+slip (~0.7% raw needed)
+    dexSafeOnly: false,
+    dexNewOnly: false,      // OFF — show all tokens, not just <5h
+    dexSort: 'spread',
     dexChain: 'solana',
-    cexInterval: 25, dexInterval: 16, // 16s DEX refresh for faster early detection
-    minVolumeMCRatio: 0,         // 0 = off by default — enable in sidebar (e.g. 4.5 for aggressive)
+    cexInterval: 25, dexInterval: 16,
+    minVolumeMCRatio: 0,    // OFF by default — enable in sidebar for pump mode
   });
 
   const pricesRef = useRef<Record<string, PriceData>>({});

@@ -36,7 +36,8 @@ const Index = () => {
         opps={state.filteredDexOpps} scanning={state.dexScanning} status={state.dexStatus} onScan={scanDex}
         bscOpps={state.filteredBscOpps} bscScanning={state.bscScanning} bscStatus={state.bscStatus} onBscScan={scanBsc}
         filters={filters} setFilters={setFilters} onRefilter={refilterDex}
-        onLogOpp={o => logOpp(o)} onCalc={o => setCalcOpp(o)} />
+        onLogOpp={o => logOpp(o)} onCalc={o => setCalcOpp(o)}
+        logs={state.logs} />
     );
     if (view === 'new') return (
       <NewTokensView newPairs={state.newPairs} onClear={clearNewPairs} />
@@ -54,7 +55,8 @@ const Index = () => {
         opps={state.filteredDexOpps} scanning={state.dexScanning} status={state.dexStatus} onScan={scanDex}
         bscOpps={state.filteredBscOpps} bscScanning={state.bscScanning} bscStatus={state.bscStatus} onBscScan={scanBsc}
         filters={filters} setFilters={setFilters} onRefilter={refilterDex}
-        onLogOpp={o => logOpp(o)} onCalc={o => setCalcOpp(o)} />
+        onLogOpp={o => logOpp(o)} onCalc={o => setCalcOpp(o)}
+        logs={state.logs} />
     );
   };
 
