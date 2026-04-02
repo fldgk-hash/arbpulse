@@ -45,8 +45,9 @@ function EarlyPumpDetector({ state }: { state: ScannerState }) {
       if (p.vol < 10_000) return false;                  // min $10k vol
       const volLiq = p.liq > 0 ? p.vol / p.liq : 0;
       if (volLiq < 1.5) return false;                    // vol must be 1.5× liq minimum
-      // Age gate: <24h (newPairs already filters to 24h, but exclude truly ancient ones)
-      if (p.createdAt !== null && (Date.now() - p.createdAt) > 86_400_000) return false;
+      // Age gate: per-chain — SOL 24h, BSC 7d (BSC tokens enter newPairs with 7d window)
+      const maxAge = p.chain === 'bsc' ? 604_800_000 : 86_400_000;
+      if (p.createdAt !== null && (Date.now() - p.createdAt) > maxAge) return false;
       return true;
     });
 
@@ -70,8 +71,8 @@ function EarlyPumpDetector({ state }: { state: ScannerState }) {
     }).slice(0, 30);
   }, [state.newPairs, sort, chainFilter]);
 
-  const SortBtn = ({ k, label }: { k: SortKey; label: string }) => (
-    <button onClick={() => setSort(k)}
+  const sortBtn = (k: SortKey, label: string) => (
+    <button key={k} onClick={() => setSort(k)}
       className={`text-[8px] px-2 py-0.5 rounded border cursor-pointer transition-colors font-mono uppercase tracking-wider ${
         sort === k
           ? 'bg-arb-green/10 border-arb-green/40 text-arb-green'
@@ -79,8 +80,8 @@ function EarlyPumpDetector({ state }: { state: ScannerState }) {
       }`}>{label}</button>
   );
 
-  const ChainBtn = ({ k, label }: { k: typeof chainFilter; label: string }) => (
-    <button onClick={() => setChainFilter(k)}
+  const chainBtn = (k: typeof chainFilter, label: string) => (
+    <button key={k} onClick={() => setChainFilter(k)}
       className={`text-[8px] px-2 py-0.5 rounded border cursor-pointer transition-colors font-mono uppercase tracking-wider ${
         chainFilter === k
           ? 'bg-arb-purple/10 border-arb-purple/40 text-arb-purple'
@@ -103,15 +104,15 @@ function EarlyPumpDetector({ state }: { state: ScannerState }) {
         </div>
         {/* Chain filter */}
         <div className="flex gap-1 mb-1.5 flex-wrap">
-          <ChainBtn k="all" label="All" /><ChainBtn k="solana" label="SOL" /><ChainBtn k="bsc" label="BSC" />
+          {chainBtn('all', 'All')}{chainBtn('solana', 'SOL')}{chainBtn('bsc', 'BSC')}
         </div>
         {/* Sort */}
         <div className="flex gap-1 flex-wrap">
-          <SortBtn k="score" label="Score" />
-          <SortBtn k="age" label="Age" />
-          <SortBtn k="volratio" label="Vol/Liq" />
-          <SortBtn k="vol" label="Vol" />
-          <SortBtn k="liq" label="Liq" />
+          {sortBtn('score', 'Score')}
+          {sortBtn('age', 'Age')}
+          {sortBtn('volratio', 'Vol/Liq')}
+          {sortBtn('vol', 'Vol')}
+          {sortBtn('liq', 'Liq')}
         </div>
       </div>
 
@@ -237,7 +238,7 @@ function EarlyPumpDetector({ state }: { state: ScannerState }) {
 
 export const AnalyticsView = memo(({ state, onClearHistory, onExportCSV }: AnalyticsViewProps) => {
   return (
-    <div className="flex flex-col gap-2 p-2.5 overflow-y-auto flex-1 bg-arb-bg">
+    <div className="flex flex-col gap-2 p-2.5 overflow-y-auto flex-1 bg-arb-bg" style={{ WebkitOverflowScrolling: 'touch' }}>
       {/* Session PnL */}
       <div className="bg-arb-bg2 border border-arb-border rounded-lg p-3.5 flex items-center justify-between flex-shrink-0">
         <div>
