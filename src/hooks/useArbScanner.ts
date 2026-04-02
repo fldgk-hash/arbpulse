@@ -1059,10 +1059,14 @@ export function useArbScanner() {
 
   // ═══ SCAN BSC ═══
   const scanBsc = useCallback(async () => {
+    try {
     setState(prev => ({ ...prev, bscScanning: true, bscStatus: 'scanning...' }));
+    addLog('BSC scan starting…', 'info');
     const addrs = await getBscTrending();
+    addLog(`BSC trending returned ${addrs.length} addresses`, 'info');
     if (!addrs.length) {
       setState(prev => ({ ...prev, bscScanning: false, bscStatus: 'error' }));
+      addLog('BSC scan: 0 addresses from trending — aborting', 'warn');
       return;
     }
     const raw = await fetchPairs(addrs, 'bsc');
