@@ -63,7 +63,7 @@ function EarlyPumpDetector({ state }: { state: ScannerState }) {
 
     return Object.values(byMint).sort((a, b) => {
       if (sort === 'score')    return pumpScore(b) - pumpScore(a);
-      if (sort === 'age')      return (a.createdAt || 0) - (b.createdAt || 0);
+      if (sort === 'age')      return (b.createdAt || 0) - (a.createdAt || 0); // newest first
       if (sort === 'volratio') return (b.liq > 0 ? b.vol / b.liq : 0) - (a.liq > 0 ? a.vol / a.liq : 0);
       if (sort === 'vol')      return b.vol - a.vol;
       if (sort === 'liq')      return b.liq - a.liq;
