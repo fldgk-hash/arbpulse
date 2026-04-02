@@ -1026,7 +1026,24 @@ export function useArbScanner() {
         }));
         addLog(`DS bsc-token-pairs: ${batchResults.length} unique counterparty tokens`, 'info');
         return batchResults;
-      })()
+      })(),
+      // NEW BSC PAIR DISCOVERY — search for recently created pairs on PancakeSwap/BSC
+      // These searches target terms that surface new/trending BSC tokens
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=pancakeswap+new',
+        'bsc-new-pcs',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.pairCreatedAt || 0) > Date.now() - 86400000
+      ),
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=BSC+launch',
+        'bsc-launch',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.pairCreatedAt || 0) > Date.now() - 86400000
+      ),
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=BNB+new+token',
+        'bsc-new-token',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address
+      ),
     ]);
 
     searches.forEach(res => {

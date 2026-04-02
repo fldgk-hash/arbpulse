@@ -36,7 +36,7 @@ export const NewTokensView = memo(({ newPairs, onClear }: NewTokensViewProps) =>
   const freshCount = filtered.filter(p => p.createdAt && (Date.now() - p.createdAt) < 3600000).length;
 
   return (
-    <div className="flex flex-col gap-2 p-2.5 overflow-y-auto flex-1 bg-arb-bg">
+    <div className="flex flex-col gap-2 p-2.5 overflow-y-auto flex-1 min-h-0 bg-arb-bg" style={{ WebkitOverflowScrolling: 'touch', overscrollBehaviorY: 'contain' }}>
 
       {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
