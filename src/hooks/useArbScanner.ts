@@ -745,7 +745,7 @@ export function useArbScanner() {
         // v5.0 bug: removed this gate → years-old tokens (MGC 1y10m, COSA 1y4m) appeared
         // as 🔴 NEW because seenAt ≈ now was used as age fallback in the UI.
         const pairCreatedMs = parsePairTimestamp(pair.pairCreatedAt);
-        if (pairCreatedMs !== null && isNew(pairCreatedMs)) {
+        if (pairCreatedMs !== null && isNew(pairCreatedMs, chain)) {
           newFound++;
           const addr = pair.baseToken?.address || '';
           const rawDex = pair.dexId || 'unknown';
