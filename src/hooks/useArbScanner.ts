@@ -973,27 +973,35 @@ export function useArbScanner() {
         'bsc-profiles',
         (t: any) => (t.chainId === 'bsc' || t.chainId === 'binance-smart-chain') && t.tokenAddress
       ),
-      // Search for tokens with BNB as quote — liquid PancakeSwap pairs
+      // BUG FIX 1: removed quoteToken?.symbol === 'WBNB' filter —
+      // DexScreener returns both 'WBNB' and 'BNB' as symbol for the same token.
+      // The strict filter was cutting 99% of results (log: bsc-bnb-search: 1 token).
       fetchDSEndpoint(
         'https://api.dexscreener.com/latest/dex/search?q=BNB',
         'bsc-bnb-search',
-        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 10000 && t.quoteToken?.symbol === 'WBNB'
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 10000
       ),
-      // USDT pairs on BSC — show up on multiple DEXes
+      // USDT pairs on BSC — multiple DEXes trade them
       fetchDSEndpoint(
         'https://api.dexscreener.com/latest/dex/search?q=USDT BSC',
         'bsc-usdt-search',
         (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 10000
       ),
-      // BUSD pairs — still active on Biswap/PCS
+      // BUG FIX 2: replaced bsc-busd-search (BUSD deprecated on BSC since 2023, always 0 results)
+      // with CAKE search — PancakeSwap's own token, genuinely on multiple BSC DEXes.
       fetchDSEndpoint(
-        'https://api.dexscreener.com/latest/dex/search?q=BUSD',
-        'bsc-busd-search',
+        'https://api.dexscreener.com/latest/dex/search?q=CAKE',
+        'bsc-cake-search',
         (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.liquidity?.usd || 0) > 5000
       ),
-      // token-pairs/v1 for core tokens — fetches ALL their pools on BSC directly
+      // BUG FIX 3: token-pairs/v1 was logging 300 raw addresses (lots of core-token duplicates).
+      // Now: extract only the NON-core counterparty tokens (the tokens being paired AGAINST WBNB/CAKE/etc.)
+      // and deduplicate before logging so the count is meaningful.
       (async () => {
+        // The core token addresses themselves — exclude from results
+        const coreSet = new Set(BSC_KNOWN_MULTI_DEX.map(a => a.toLowerCase()));
         const coreTokens = BSC_KNOWN_MULTI_DEX.slice(0, 5); // WBNB, CAKE, ETH, BTCB, USDT
+        const seen2 = new Set<string>();
         const batchResults: string[] = [];
         await Promise.all(coreTokens.map(async addr => {
           try {
@@ -1002,12 +1010,21 @@ export function useArbScanner() {
             const d = await r.json();
             const pairs = Array.isArray(d) ? d : (d.pairs || []);
             pairs.forEach((pair: any) => {
-              if (pair.quoteToken?.address) batchResults.push(pair.quoteToken.address);
-              if (pair.baseToken?.address)  batchResults.push(pair.baseToken.address);
+              // Only push the NON-core side of the pair (i.e. the token being traded)
+              const base  = pair.baseToken?.address?.toLowerCase();
+              const quote = pair.quoteToken?.address?.toLowerCase();
+              // The "interesting" token is whichever side is NOT a core token
+              const target = base && !coreSet.has(base) ? pair.baseToken.address
+                : quote && !coreSet.has(quote) ? pair.quoteToken.address
+                : null;
+              if (target && !seen2.has(target.toLowerCase())) {
+                seen2.add(target.toLowerCase());
+                batchResults.push(target);
+              }
             });
           } catch {}
         }));
-        addLog(`DS bsc-token-pairs: ${batchResults.length} addresses`, 'info');
+        addLog(`DS bsc-token-pairs: ${batchResults.length} unique counterparty tokens`, 'info');
         return batchResults;
       })()
     ]);
