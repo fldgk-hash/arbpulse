@@ -290,7 +290,7 @@ export function fmtAge(ts: number | null): string {
   return Math.floor(s / 86400) + 'd';
 }
 
-const isNew = (ts: number | null) => ts != null && (Date.now() - ts) < 86400000;
+const isNew = (ts: number | null, chain: 'solana' | 'bsc' = 'solana') => ts != null && (Date.now() - ts) < (chain === 'bsc' ? 604800000 : 86400000); // BSC: 7d, SOL: 24h
 const isVNew = (ts: number | null) => ts != null && (Date.now() - ts) < 21600000;
 
 // DexScreener returns pairCreatedAt as either:
