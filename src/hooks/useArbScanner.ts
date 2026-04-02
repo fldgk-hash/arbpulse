@@ -1098,7 +1098,11 @@ export function useArbScanner() {
         }
       });
     });
-  }, [getBscTrending, fetchPairs, applyDexFilters, fetchSafety]);
+    } catch (e: any) {
+      addLog(`BSC scan CRASHED: ${e.message}`, 'err');
+      setState(prev => ({ ...prev, bscScanning: false, bscStatus: 'error' }));
+    }
+  }, [getBscTrending, fetchPairs, applyDexFilters, fetchSafety, addLog]);
 
   // ═══ CEX CALC ═══
   const calcTri = useCallback((): CexOpp[] => {
