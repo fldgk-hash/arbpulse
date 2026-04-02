@@ -290,7 +290,7 @@ export function fmtAge(ts: number | null): string {
   return Math.floor(s / 86400) + 'd';
 }
 
-const isNew = (ts: number | null) => ts != null && (Date.now() - ts) < 86400000;
+const isNew = (ts: number | null, chain: 'solana' | 'bsc' = 'solana') => ts != null && (Date.now() - ts) < (chain === 'bsc' ? 604800000 : 86400000); // BSC: 7d, SOL: 24h
 const isVNew = (ts: number | null) => ts != null && (Date.now() - ts) < 21600000;
 
 // DexScreener returns pairCreatedAt as either:
@@ -745,7 +745,7 @@ export function useArbScanner() {
         // v5.0 bug: removed this gate → years-old tokens (MGC 1y10m, COSA 1y4m) appeared
         // as 🔴 NEW because seenAt ≈ now was used as age fallback in the UI.
         const pairCreatedMs = parsePairTimestamp(pair.pairCreatedAt);
-        if (pairCreatedMs !== null && isNew(pairCreatedMs)) {
+        if (pairCreatedMs !== null && isNew(pairCreatedMs, chain)) {
           newFound++;
           const addr = pair.baseToken?.address || '';
           const rawDex = pair.dexId || 'unknown';
@@ -1026,7 +1026,24 @@ export function useArbScanner() {
         }));
         addLog(`DS bsc-token-pairs: ${batchResults.length} unique counterparty tokens`, 'info');
         return batchResults;
-      })()
+      })(),
+      // NEW BSC PAIR DISCOVERY — search for recently created pairs on PancakeSwap/BSC
+      // These searches target terms that surface new/trending BSC tokens
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=pancakeswap+new',
+        'bsc-new-pcs',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.pairCreatedAt || 0) > Date.now() - 86400000
+      ),
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=BSC+launch',
+        'bsc-launch',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address && (t.pairCreatedAt || 0) > Date.now() - 86400000
+      ),
+      fetchDSEndpoint(
+        'https://api.dexscreener.com/latest/dex/search?q=BNB+new+token',
+        'bsc-new-token',
+        (t: any) => t.chainId === 'bsc' && t.baseToken?.address
+      ),
     ]);
 
     searches.forEach(res => {
@@ -1042,10 +1059,14 @@ export function useArbScanner() {
 
   // ═══ SCAN BSC ═══
   const scanBsc = useCallback(async () => {
+    try {
     setState(prev => ({ ...prev, bscScanning: true, bscStatus: 'scanning...' }));
+    addLog('BSC scan starting…', 'info');
     const addrs = await getBscTrending();
+    addLog(`BSC trending returned ${addrs.length} addresses`, 'info');
     if (!addrs.length) {
       setState(prev => ({ ...prev, bscScanning: false, bscStatus: 'error' }));
+      addLog('BSC scan: 0 addresses from trending — aborting', 'warn');
       return;
     }
     const raw = await fetchPairs(addrs, 'bsc');
@@ -1077,7 +1098,11 @@ export function useArbScanner() {
         }
       });
     });
-  }, [getBscTrending, fetchPairs, applyDexFilters, fetchSafety]);
+    } catch (e: any) {
+      addLog(`BSC scan CRASHED: ${e.message}`, 'err');
+      setState(prev => ({ ...prev, bscScanning: false, bscStatus: 'error' }));
+    }
+  }, [getBscTrending, fetchPairs, applyDexFilters, fetchSafety, addLog]);
 
   // ═══ CEX CALC ═══
   const calcTri = useCallback((): CexOpp[] => {

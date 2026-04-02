@@ -108,7 +108,7 @@ const Index = () => {
       </div>
 
       {/* Mobile */}
-      <div className="lg:hidden flex-1 overflow-hidden flex flex-col">
+      <div className="lg:hidden flex-1 overflow-hidden flex flex-col min-h-0">
         {view === 'log' ? (
           <LogPanel state={state} onClearLogs={clearLogs} />
         ) : view === 'settings' ? (

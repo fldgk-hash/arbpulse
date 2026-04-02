@@ -1,5 +1,5 @@
 import { memo, useCallback, useState, useMemo } from 'react';
-import type { DexOpp, ScannerFilters, LogEntry } from '@/hooks/useArbScanner';
+import type { DexOpp, ScannerFilters, LogEntry, SafetyResult } from '@/hooks/useArbScanner';
 import { fmtPrice, fmtVol, fmtAge, LOW_LIQ_THRESHOLD } from '@/hooks/useArbScanner';
 
 interface DexViewProps {
