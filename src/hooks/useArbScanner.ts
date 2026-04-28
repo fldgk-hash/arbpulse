@@ -710,10 +710,10 @@ export function useArbScanner() {
     return all.slice(0, 60);
   }, [fetchDSEndpoint, addLog]);
 
-  const fetchPairs = useCallback(async (addresses: string[], chain: 'solana' | 'bsc' = 'solana'): Promise<DexOpp[]> => {
-    if (!addresses.length) return [];
+  const fetchPairs = useCallback(async (addresses: string[], chain: 'solana' | 'bsc' = 'solana', seedPairs: any[] = []): Promise<DexOpp[]> => {
+    if (!addresses.length && seedPairs.length === 0) return [];
     const f = filtersRef.current;
-    const allPairs: any[] = [];
+    const allPairs: any[] = [...seedPairs];
     const batches: string[][] = [];
     for (let i = 0; i < Math.min(addresses.length, 60); i += 30) batches.push(addresses.slice(i, i + 30));
 
