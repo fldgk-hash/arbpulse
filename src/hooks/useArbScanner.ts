@@ -666,9 +666,20 @@ export function useArbScanner() {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
       const items = Array.isArray(d) ? d : (d.pairs || d.tokens || []);
-      const addrs = items.filter(filterFn).map((t: any) => t.tokenAddress || t.baseToken?.address).filter(Boolean);
+      const addrs = items.filter(filterFn).flatMap((t: any) => [t.tokenAddress, t.baseToken?.address, t.quoteToken?.address]).filter(Boolean);
       addLog(`DS ${label}: ${addrs.length} tokens`, 'info');
       return addrs;
+    } catch (e: any) { addLog(`DS ${label} failed: ${e.message}`, 'warn'); return []; }
+  }, [addLog]);
+
+  const fetchDSPairs = useCallback(async (url: string, label: string, filterFn: (p: any) => boolean): Promise<any[]> => {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      const pairs = (Array.isArray(d) ? d : (d.pairs || [])).filter(filterFn);
+      addLog(`DS ${label}: ${pairs.length} pairs`, 'info');
+      return pairs;
     } catch (e: any) { addLog(`DS ${label} failed: ${e.message}`, 'warn'); return []; }
   }, [addLog]);
 
@@ -699,10 +710,10 @@ export function useArbScanner() {
     return all.slice(0, 60);
   }, [fetchDSEndpoint, addLog]);
 
-  const fetchPairs = useCallback(async (addresses: string[], chain: 'solana' | 'bsc' = 'solana'): Promise<DexOpp[]> => {
-    if (!addresses.length) return [];
+  const fetchPairs = useCallback(async (addresses: string[], chain: 'solana' | 'bsc' = 'solana', seedPairs: any[] = []): Promise<DexOpp[]> => {
+    if (!addresses.length && seedPairs.length === 0) return [];
     const f = filtersRef.current;
-    const allPairs: any[] = [];
+    const allPairs: any[] = [...seedPairs];
     const batches: string[][] = [];
     for (let i = 0; i < Math.min(addresses.length, 60); i += 30) batches.push(addresses.slice(i, i + 30));
 
@@ -853,7 +864,7 @@ export function useArbScanner() {
             buyPairAddr: buy.pairAddr || '', sellPairAddr: sell.pairAddr || '',
             vol24h: Math.max(buy.vol, sell.vol),
             volMCRatio,
-            createdAt: age, isNew: isNew(age), isVNew: isVNew(age),
+            createdAt: age, isNew: isNew(age, chain), isVNew: isVNew(age),
             hot: sp > 1.5,
             lowLiquidity: minLiqVal < liqThreshold,
             safety: null,
@@ -953,10 +964,19 @@ export function useArbScanner() {
   }, [getTrending, fetchPairs, applyDexFilters, fetchSafety]);
 
   // ═══ BSC TRENDING ═══
-  const getBscTrending = useCallback(async (): Promise<string[]> => {
+  const getBscTrending = useCallback(async (): Promise<{ addresses: string[]; seedPairs: any[] }> => {
     const seen = new Set<string>();
     const all: string[] = [];
     const add = (addr: string) => { if (addr && !seen.has(addr)) { seen.add(addr); all.push(addr); } };
+    const isRecentBscPair = (p: any) => {
+      const created = parsePairTimestamp(p.pairCreatedAt);
+      return p.chainId === 'bsc'
+        && !!p.baseToken?.address
+        && created !== null
+        && created <= Date.now() + 3_600_000
+        && Date.now() - created < 604_800_000
+        && (p.liquidity?.usd || 0) >= 1_000;
+    };
 
     // 1. KNOWN multi-DEX tokens — always queued first, guaranteed 2+ DEX coverage
     BSC_KNOWN_MULTI_DEX.forEach(add);
@@ -1044,32 +1064,57 @@ export function useArbScanner() {
         'bsc-new-token',
         (t: any) => t.chainId === 'bsc' && t.baseToken?.address
       ),
+      fetchDSPairs(
+        'https://api.dexscreener.com/latest/dex/search?q=bsc',
+        'bsc-latest-search',
+        isRecentBscPair
+      ),
+      fetchDSPairs(
+        'https://api.dexscreener.com/latest/dex/search?q=pancakeswap',
+        'bsc-latest-pancakeswap',
+        isRecentBscPair
+      ),
     ]);
+
+    const seedPairs: any[] = [];
+    const seenSeedPairs = new Set<string>();
 
     searches.forEach(res => {
       if (res.status === 'fulfilled') {
-        const addrs = Array.isArray(res.value) ? res.value : [];
-        addrs.forEach((a: string) => add(a));
+        const values = Array.isArray(res.value) ? res.value : [];
+        values.forEach((value: any) => {
+          if (value?.pairAddress) {
+            const key = value.pairAddress.toLowerCase();
+            if (!seenSeedPairs.has(key)) {
+              seenSeedPairs.add(key);
+              seedPairs.push(value);
+            }
+            add(value.baseToken?.address);
+            add(value.quoteToken?.address);
+          } else {
+            add(value);
+          }
+        });
       }
     });
 
-    addLog(`BSC trending: ${all.length} unique tokens queued`, 'info');
-    return all.slice(0, 60);
-  }, [fetchDSEndpoint, addLog]);
+    addLog(`BSC trending: ${all.length} tokens queued · ${seedPairs.length} latest pairs seeded`, 'info');
+    return { addresses: all.slice(0, 60), seedPairs };
+  }, [fetchDSEndpoint, fetchDSPairs, addLog]);
 
   // ═══ SCAN BSC ═══
   const scanBsc = useCallback(async () => {
     try {
     setState(prev => ({ ...prev, bscScanning: true, bscStatus: 'scanning...' }));
     addLog('BSC scan starting…', 'info');
-    const addrs = await getBscTrending();
-    addLog(`BSC trending returned ${addrs.length} addresses`, 'info');
-    if (!addrs.length) {
+    const { addresses: addrs, seedPairs } = await getBscTrending();
+    addLog(`BSC trending returned ${addrs.length} addresses + ${seedPairs.length} latest pairs`, 'info');
+    if (!addrs.length && !seedPairs.length) {
       setState(prev => ({ ...prev, bscScanning: false, bscStatus: 'error' }));
-      addLog('BSC scan: 0 addresses from trending — aborting', 'warn');
+      addLog('BSC scan: 0 addresses/latest pairs from trending — aborting', 'warn');
       return;
     }
-    const raw = await fetchPairs(addrs, 'bsc');
+    const raw = await fetchPairs(addrs, 'bsc', seedPairs);
     bscOppsRef.current = raw;
     const filtered = applyDexFilters(raw);
 

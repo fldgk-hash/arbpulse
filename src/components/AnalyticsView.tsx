@@ -41,8 +41,10 @@ function EarlyPumpDetector({ state }: { state: ScannerState }) {
     // Use newPairs — captures ALL tokens including single-DEX pumps
     const filtered = state.newPairs.filter(p => {
       if (chainFilter !== 'all' && p.chain !== chainFilter) return false;
-      if (p.liq < 5_000) return false;                  // min $5k liq
-      if (p.vol < 10_000) return false;                  // min $10k vol
+      const minLiq = p.chain === 'bsc' ? 2_000 : 5_000;
+      const minVol = p.chain === 'bsc' ? 5_000 : 10_000;
+      if (p.liq < minLiq) return false;                  // BSC uses lower early-liq threshold
+      if (p.vol < minVol) return false;                  // BSC uses lower early-volume threshold
       const volLiq = p.liq > 0 ? p.vol / p.liq : 0;
       if (volLiq < 1.5) return false;                    // vol must be 1.5× liq minimum
       // Age gate: per-chain — SOL 24h, BSC 7d (BSC tokens enter newPairs with 7d window)
@@ -120,7 +122,7 @@ function EarlyPumpDetector({ state }: { state: ScannerState }) {
         <div className="text-center py-6 text-arb-muted text-[11px] leading-relaxed px-4">
           🔍 No early pumps detected yet.<br />
           <span className="text-[10px] text-arb-amber">
-            Waiting for tokens with vol &gt; 1.5× liq · $5k+ liq · $10k+ vol.
+            Waiting for tokens with vol &gt; 1.5× liq · SOL $5k/$10k · BSC $2k/$5k liq/vol.
           </span>
           <br />
           <span className="text-[9px] text-arb-muted mt-1 block">
