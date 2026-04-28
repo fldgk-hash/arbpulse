@@ -666,9 +666,20 @@ export function useArbScanner() {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const d = await r.json();
       const items = Array.isArray(d) ? d : (d.pairs || d.tokens || []);
-      const addrs = items.filter(filterFn).map((t: any) => t.tokenAddress || t.baseToken?.address).filter(Boolean);
+      const addrs = items.filter(filterFn).flatMap((t: any) => [t.tokenAddress, t.baseToken?.address, t.quoteToken?.address]).filter(Boolean);
       addLog(`DS ${label}: ${addrs.length} tokens`, 'info');
       return addrs;
+    } catch (e: any) { addLog(`DS ${label} failed: ${e.message}`, 'warn'); return []; }
+  }, [addLog]);
+
+  const fetchDSPairs = useCallback(async (url: string, label: string, filterFn: (p: any) => boolean): Promise<any[]> => {
+    try {
+      const r = await fetch(url, { signal: AbortSignal.timeout(8000) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      const pairs = (Array.isArray(d) ? d : (d.pairs || [])).filter(filterFn);
+      addLog(`DS ${label}: ${pairs.length} pairs`, 'info');
+      return pairs;
     } catch (e: any) { addLog(`DS ${label} failed: ${e.message}`, 'warn'); return []; }
   }, [addLog]);
 
