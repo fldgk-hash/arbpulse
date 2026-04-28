@@ -964,10 +964,19 @@ export function useArbScanner() {
   }, [getTrending, fetchPairs, applyDexFilters, fetchSafety]);
 
   // ═══ BSC TRENDING ═══
-  const getBscTrending = useCallback(async (): Promise<string[]> => {
+  const getBscTrending = useCallback(async (): Promise<{ addresses: string[]; seedPairs: any[] }> => {
     const seen = new Set<string>();
     const all: string[] = [];
     const add = (addr: string) => { if (addr && !seen.has(addr)) { seen.add(addr); all.push(addr); } };
+    const isRecentBscPair = (p: any) => {
+      const created = parsePairTimestamp(p.pairCreatedAt);
+      return p.chainId === 'bsc'
+        && !!p.baseToken?.address
+        && created !== null
+        && created <= Date.now() + 3_600_000
+        && Date.now() - created < 604_800_000
+        && (p.liquidity?.usd || 0) >= 1_000;
+    };
 
     // 1. KNOWN multi-DEX tokens — always queued first, guaranteed 2+ DEX coverage
     BSC_KNOWN_MULTI_DEX.forEach(add);
@@ -1055,18 +1064,43 @@ export function useArbScanner() {
         'bsc-new-token',
         (t: any) => t.chainId === 'bsc' && t.baseToken?.address
       ),
+      fetchDSPairs(
+        'https://api.dexscreener.com/latest/dex/search?q=bsc',
+        'bsc-latest-search',
+        isRecentBscPair
+      ),
+      fetchDSPairs(
+        'https://api.dexscreener.com/latest/dex/search?q=pancakeswap',
+        'bsc-latest-pancakeswap',
+        isRecentBscPair
+      ),
     ]);
+
+    const seedPairs: any[] = [];
+    const seenSeedPairs = new Set<string>();
 
     searches.forEach(res => {
       if (res.status === 'fulfilled') {
-        const addrs = Array.isArray(res.value) ? res.value : [];
-        addrs.forEach((a: string) => add(a));
+        const values = Array.isArray(res.value) ? res.value : [];
+        values.forEach((value: any) => {
+          if (value?.pairAddress) {
+            const key = value.pairAddress.toLowerCase();
+            if (!seenSeedPairs.has(key)) {
+              seenSeedPairs.add(key);
+              seedPairs.push(value);
+            }
+            add(value.baseToken?.address);
+            add(value.quoteToken?.address);
+          } else {
+            add(value);
+          }
+        });
       }
     });
 
-    addLog(`BSC trending: ${all.length} unique tokens queued`, 'info');
-    return all.slice(0, 60);
-  }, [fetchDSEndpoint, addLog]);
+    addLog(`BSC trending: ${all.length} tokens queued · ${seedPairs.length} latest pairs seeded`, 'info');
+    return { addresses: all.slice(0, 60), seedPairs };
+  }, [fetchDSEndpoint, fetchDSPairs, addLog]);
 
   // ═══ SCAN BSC ═══
   const scanBsc = useCallback(async () => {
