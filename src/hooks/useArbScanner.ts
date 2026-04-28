@@ -864,7 +864,7 @@ export function useArbScanner() {
             buyPairAddr: buy.pairAddr || '', sellPairAddr: sell.pairAddr || '',
             vol24h: Math.max(buy.vol, sell.vol),
             volMCRatio,
-            createdAt: age, isNew: isNew(age), isVNew: isVNew(age),
+            createdAt: age, isNew: isNew(age, chain), isVNew: isVNew(age),
             hot: sp > 1.5,
             lowLiquidity: minLiqVal < liqThreshold,
             safety: null,
@@ -1107,14 +1107,14 @@ export function useArbScanner() {
     try {
     setState(prev => ({ ...prev, bscScanning: true, bscStatus: 'scanning...' }));
     addLog('BSC scan starting…', 'info');
-    const addrs = await getBscTrending();
-    addLog(`BSC trending returned ${addrs.length} addresses`, 'info');
-    if (!addrs.length) {
+    const { addresses: addrs, seedPairs } = await getBscTrending();
+    addLog(`BSC trending returned ${addrs.length} addresses + ${seedPairs.length} latest pairs`, 'info');
+    if (!addrs.length && !seedPairs.length) {
       setState(prev => ({ ...prev, bscScanning: false, bscStatus: 'error' }));
-      addLog('BSC scan: 0 addresses from trending — aborting', 'warn');
+      addLog('BSC scan: 0 addresses/latest pairs from trending — aborting', 'warn');
       return;
     }
-    const raw = await fetchPairs(addrs, 'bsc');
+    const raw = await fetchPairs(addrs, 'bsc', seedPairs);
     bscOppsRef.current = raw;
     const filtered = applyDexFilters(raw);
 
