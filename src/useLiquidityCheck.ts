@@ -8,12 +8,12 @@ import { useState, useCallback, useRef } from 'react';
 import { 
   LiquidityProfiler, 
   liquidityProfiler as defaultProfiler 
-} from '../engine/LiquidityProfiler';
+} from '../LiquidityProfiler';
 import { 
   TokenPair, 
   DepthProfile, 
   LiquidityFilterConfig 
-} from '../engine/types/liquidity.types';
+} from '../types/liquidity.types';
 
 export interface UseLiquidityCheckReturn {
   profile: DepthProfile | null;

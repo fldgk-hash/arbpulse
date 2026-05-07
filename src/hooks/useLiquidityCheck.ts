@@ -5,8 +5,8 @@
 // ============================================
 
 import { useState, useCallback, useRef } from 'react';
-import { TokenPair, DepthProfile, LiquidityFilterConfig } from '../engine/types/liquidity.types';
-import LiquidityProfiler, { createLiquidityProfiler } from '../engine/LiquidityProfiler';
+import { TokenPair, DepthProfile, LiquidityFilterConfig } from '../types/liquidity.types';
+import LiquidityProfiler, { createLiquidityProfiler } from '../LiquidityProfiler';
 
 export interface LiquidityCheckState {
   profile: DepthProfile | null;

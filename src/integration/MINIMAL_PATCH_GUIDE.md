@@ -7,8 +7,8 @@
 ## Add these imports at the top:
 
 ```typescript
-import { liquidityProfiler } from '../engine/LiquidityProfiler';
-import { TokenPair, DepthProfile } from '../engine/types/liquidity.types';
+import { liquidityProfiler } from '../LiquidityProfiler';
+import { TokenPair, DepthProfile } from '../types/liquidity.types';
 ```
 
 ## Add these fields to your existing ArbOpportunity type:
@@ -154,7 +154,7 @@ const [showLiquidity, setShowLiquidity] = useState(false);
 
 ```typescript
 // This initializes the singleton
-import '../engine/LiquidityProfiler';
+import '../LiquidityProfiler';
 ```
 
 ## Add environment variables to .env:

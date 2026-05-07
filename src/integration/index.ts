@@ -23,7 +23,7 @@ export { useLiquidityCheck } from '../useLiquidityCheck';
 export type { UseLiquidityCheckReturn } from '../useLiquidityCheck';
 
 // UI Components
-export { LiquidityDepthCard } from '../components/LiquidityDepthCard';
+export { LiquidityDepthCard } from '../LiquidityDepthCard';
 
 // Integration (enhanced scanner)
 export { useArbScanner, DEFAULT_SCANNER_CONFIG } from './useArbScanner.enhanced';

@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { ArbOpportunity } from '../integration/useArbScanner.enhanced';
-import { LiquidityDepthCard } from '../components/LiquidityDepthCard';
+import { LiquidityDepthCard } from '../LiquidityDepthCard';
 
 interface OpportunityCardProps {
   opportunity: ArbOpportunity;

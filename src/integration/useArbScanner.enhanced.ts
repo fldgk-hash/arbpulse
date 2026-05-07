@@ -4,8 +4,8 @@
 // ============================================
 
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { liquidityProfiler } from '../engine/LiquidityProfiler';
-import { TokenPair, DepthProfile } from '../engine/types/liquidity.types';
+import { liquidityProfiler } from '../LiquidityProfiler';
+import { TokenPair, DepthProfile } from '../types/liquidity.types';
 
 // ============================================
 // Types

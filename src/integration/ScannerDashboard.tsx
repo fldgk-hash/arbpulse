@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { useArbScanner, ScannerConfig } from '../integration/useArbScanner.enhanced';
 import { OpportunityCard } from '../integration/OpportunityCard.enhanced';
-import { TokenPair } from '../engine/types/liquidity.types';
+import { TokenPair } from '../types/liquidity.types';
 
 interface ScannerDashboardProps {
   initialPairs?: TokenPair[];
