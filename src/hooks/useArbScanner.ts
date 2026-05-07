@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { liquidityProfiler } from '../LiquidityProfiler';
+import type { DepthProfile, TokenPair as LPTokenPair } from '../types/liquidity.types';
 
 // ═══════════════════════════════════════════════════════════════
 // useArbScanner.ts — v4.1 (2026-03-30)
@@ -152,6 +154,13 @@ export interface DexOpp {
   isNew: boolean; isVNew: boolean; hot: boolean;
   lowLiquidity: boolean;
   safety: SafetyResult | null;
+  // Liquidity intelligence (populated async after scan)
+  liquidityProfile?: DepthProfile | null;
+  isTradeable?: boolean;
+  tradeableReason?: string | null;
+  positionCeiling?: number;
+  healthScore?: number;
+  riskLevel?: string;
 }
 
 // TVL threshold below which we flag a pair as low-liquidity risk
