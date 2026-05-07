@@ -349,6 +349,44 @@ function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number;
           🔍 {isBsc ? 'BSCscan' : 'Solscan'}
         </a>
       </div>
+      </div>
+
+      {/* Liquidity intelligence */}
+      {(o.healthScore !== undefined || o.positionCeiling !== undefined) && (
+        <div className="flex flex-wrap gap-1.5 mt-2">
+          <span className={`text-[9px] px-1.5 py-0.5 rounded border ${
+            (o.healthScore ?? 0) >= 60
+              ? 'bg-arb-green/10 border-arb-green/30 text-arb-green'
+              : (o.healthScore ?? 0) >= 40
+              ? 'bg-arb-amber/10 border-arb-amber/30 text-arb-amber'
+              : 'bg-arb-red/10 border-arb-red/30 text-arb-red'
+          }`}>
+            Health {o.healthScore ?? '?'}/100 · {o.riskLevel ?? '—'}
+          </span>
+          <span className="text-[9px] px-1.5 py-0.5 rounded border bg-arb-cyan/10 border-arb-cyan/30 text-arb-cyan">
+            Max ${(o.positionCeiling ?? 0).toLocaleString()}
+          </span>
+        </div>
+      )}
+      {o.tradeableReason && (
+        <div className="mt-1.5 text-[9px] text-arb-red bg-arb-red/10 rounded px-2 py-1">⚠ {o.tradeableReason}</div>
+      )}
+      {o.liquidityProfile && (
+        <button
+          onClick={() => setShowLiq(s => !s)}
+          className="mt-2 text-[9px] text-arb-muted hover:text-arb-head w-full py-1 border-t border-arb-border"
+        >
+          {showLiq ? '▲ Hide' : '▼ Show'} Liquidity Analysis
+        </button>
+      )}
+      {showLiq && o.liquidityProfile && (
+        <div className="mt-2 text-[10px] text-arb-muted space-y-0.5">
+          <div>Real depth @2%: ${Math.round(o.liquidityProfile.realDepth2pct).toLocaleString()} · @5%: ${Math.round(o.liquidityProfile.realDepth5pct).toLocaleString()}</div>
+          <div>LPs: {o.liquidityProfile.lpCount} · Top LP: {o.liquidityProfile.topLpShare.toFixed(1)}% · Gini: {o.liquidityProfile.giniCoefficient.toFixed(2)}</div>
+          <div>Wash prob: {o.liquidityProfile.washProbability}% · Vol/Liq: {o.liquidityProfile.volumeToLiquidityRatio.toFixed(2)}×</div>
+          <div>Exit time est: {o.liquidityProfile.exitTimeline.timeToLiquidateMinutes.toFixed(1)} min · Avg slip: {(o.liquidityProfile.exitTimeline.avgSlippage * 100).toFixed(2)}%</div>
+        </div>
+      )}
     </div>
   );
 }
