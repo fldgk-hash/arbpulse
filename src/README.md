@@ -75,7 +75,7 @@ if (!isTradeable) {
 ### 4. Add UI component
 
 ```tsx
-import { LiquidityDepthCard } from '../LiquidityDepthCard';
+import { LiquidityDepthCard } from '../components/LiquidityDepthCard';
 
 // In your opportunity card:
 <LiquidityDepthCard profile={profile} />

@@ -5,7 +5,7 @@
 // ============================================
 
 import React from 'react';
-import { DepthProfile, ExitBand } from '../types/liquidity.types';
+import { DepthProfile, ExitBand } from '../engine/types/liquidity.types';
 
 interface LiquidityCardProps {
   profile: DepthProfile;

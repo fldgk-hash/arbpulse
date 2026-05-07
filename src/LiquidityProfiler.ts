@@ -240,7 +240,7 @@ export class LiquidityProfiler {
       const pool = await getV3Pool(subgraph, pair.address);
 
       if (pool) {
-        const ticks = await getPoolTicks(subgraph, pool.id || pair.address, parseInt(pool.tick), 50);
+        const ticks = await getPoolTicks(subgraph, parseInt(pool.tick), 50);
 
         // Convert ticks to LP-like positions
         const positions: LPPosition[] = ticks
@@ -297,7 +297,7 @@ export class LiquidityProfiler {
         if (pool) {
           const currentTick = parseInt(pool.tick);
           const currentPrice = parseFloat(pool.sqrtPriceX96) / (2 ** 96);
-          const ticks = await getPoolTicks(subgraph, pool.id || pair.address, currentTick, 50);
+          const ticks = await getPoolTicks(subgraph, currentTick, 50);
 
           return calculateDepthFromTicks(
             ticks,
