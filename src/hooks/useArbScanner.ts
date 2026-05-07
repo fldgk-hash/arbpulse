@@ -970,7 +970,45 @@ export function useArbScanner() {
         }
       });
     });
+    enrichLiquidity(raw, 'solana');
   }, [getTrending, fetchPairs, applyDexFilters, fetchSafety]);
+
+  // ═══ LIQUIDITY ENRICHMENT ═══
+  // Runs LiquidityProfiler on top opportunities and decorates them in-place.
+  const enrichLiquidity = useCallback((opps: DexOpp[], chain: 'solana' | 'bsc') => {
+    const targets = opps.slice(0, 12); // cap concurrency / API calls
+    targets.forEach(async (o) => {
+      try {
+        const tp: LPTokenPair = {
+          chain,
+          address: o.buyPairAddr || o.mint,
+          baseToken: { address: o.mint, symbol: o.symbol, decimals: chain === 'bsc' ? 18 : 9 },
+          quoteToken: { address: '', symbol: chain === 'bsc' ? 'WBNB' : 'SOL', decimals: chain === 'bsc' ? 18 : 9 },
+          dexId: o.buyDex,
+          priceUsd: o.buyPrice,
+          liquidityUsd: o.minLiq,
+          volume24h: o.vol24h,
+        };
+        const profile = await liquidityProfiler.analyzePair(tp);
+        o.liquidityProfile = profile;
+        o.healthScore = profile.healthScore;
+        o.riskLevel = profile.riskLevel;
+        o.positionCeiling = profile.positionCeiling;
+        o.isTradeable = profile.healthScore >= 40;
+        o.tradeableReason = o.isTradeable ? null : `Health ${profile.healthScore}/100`;
+      } catch (e: any) {
+        o.tradeableReason = `Liquidity analysis failed`;
+      }
+      // Push periodic UI refresh
+      if (chain === 'bsc') {
+        bscOppsRef.current = [...bscOppsRef.current];
+        setState(prev => ({ ...prev, bscOpps: [...bscOppsRef.current], filteredBscOpps: applyDexFilters(bscOppsRef.current) }));
+      } else {
+        dexOppsRef.current = [...dexOppsRef.current];
+        setState(prev => ({ ...prev, dexOpps: [...dexOppsRef.current], filteredDexOpps: applyDexFilters(dexOppsRef.current) }));
+      }
+    });
+  }, [applyDexFilters]);
 
   // ═══ BSC TRENDING ═══
   const getBscTrending = useCallback(async (): Promise<{ addresses: string[]; seedPairs: any[] }> => {
