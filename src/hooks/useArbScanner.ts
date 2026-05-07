@@ -1152,6 +1152,7 @@ export function useArbScanner() {
         }
       });
     });
+    enrichLiquidity(raw, 'bsc');
     } catch (e: any) {
       addLog(`BSC scan CRASHED: ${e.message}`, 'err');
       setState(prev => ({ ...prev, bscScanning: false, bscStatus: 'error' }));
