@@ -56,7 +56,7 @@ if (pair.liquidityUsd < LOW_LIQ_THRESHOLD) return null;
 Replace with:
 ```typescript
 // NEW: Deep analysis
-import { createLiquidityProfiler } from '../engine/LiquidityProfiler';
+import { createLiquidityProfiler } from '../LiquidityProfiler';
 
 const profiler = createLiquidityProfiler({
   minTvl: 10000,

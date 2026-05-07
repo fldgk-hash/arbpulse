@@ -5,7 +5,7 @@
 // ============================================
 
 import React from 'react';
-import { DepthProfile } from '../engine/types/liquidity.types';
+import { DepthProfile } from './types/liquidity.types';
 
 interface LiquidityDepthCardProps {
   profile: DepthProfile | null;
