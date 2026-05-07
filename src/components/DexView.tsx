@@ -349,7 +349,6 @@ function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number;
           🔍 {isBsc ? 'BSCscan' : 'Solscan'}
         </a>
       </div>
-      </div>
 
       {/* Liquidity intelligence */}
       {(o.healthScore !== undefined || o.positionCeiling !== undefined) && (
