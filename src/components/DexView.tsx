@@ -238,6 +238,7 @@ function DyorBanner() {
 
 /* ─── DexCard ───────────────────────────────────────────────────────────────── */
 function DexCard({ opp: o, index, onLog, onCalc }: { opp: DexOpp; index: number; onLog: (o: DexOpp) => void; onCalc: (o: DexOpp) => void }) {
+  const [showLiq, setShowLiq] = useState(false);
   const sc = o.spreadPct > 2 ? 'text-arb-green' : o.spreadPct > 0.5 ? 'text-arb-amber' : 'text-arb-muted';
   const accentClass = o.hot ? 'bg-gradient-to-b from-arb-red to-arb-amber' : o.safety ? (o.safety.score < 300 ? 'bg-arb-green' : o.safety.score < 600 ? 'bg-arb-amber' : 'bg-arb-red') : 'bg-arb-amber';
   const borderClass = o.hot ? 'border-arb-red/30' : o.isNew ? 'border-arb-cyan/30' : o.lowLiquidity ? 'border-arb-amber/40' : 'border-arb-border';
