@@ -17,10 +17,9 @@ class EdgeStore {
   private prevMid = 0;
   private liquidations: LiquidationEntry[] = [];
   private wallets: SmartWallet[] = [];
-  private liquidationsKeyMissing = false;
-  private walletsKeyMissing = false;
+  private liquidationsUnavailable = false;
+  private walletsUnavailable = false;
   private tickHandle: number | null = null;
-  private liqHandle: number | null = null;
   private walHandle: number | null = null;
   private started = false;
   private lastSnapshot: EdgeSnapshot | null = null;
@@ -31,14 +30,13 @@ class EdgeStore {
     this.stream = new BinanceWsStream(this.symbol, {
       onBook: () => {},
       onTrade: (t: TradeTick) => this.trades.add(t),
+      onLiquidation: (entry) => this.addLiquidation(entry),
       onStatus: (c) => { this.connected = c; },
     });
     this.stream.start();
     this.tickHandle = window.setInterval(() => this.tick(), 1000);
-    this.liqHandle = window.setInterval(() => this.fetchLiquidations(), 5000);
     this.walHandle = window.setInterval(() => this.fetchWallets(), 30000);
     // initial fetch
-    this.fetchLiquidations();
     this.fetchWallets();
   }
 
@@ -46,9 +44,8 @@ class EdgeStore {
     this.started = false;
     this.stream?.stop();
     if (this.tickHandle) clearInterval(this.tickHandle);
-    if (this.liqHandle) clearInterval(this.liqHandle);
     if (this.walHandle) clearInterval(this.walHandle);
-    this.tickHandle = this.liqHandle = this.walHandle = null;
+    this.tickHandle = this.walHandle = null;
   }
 
   subscribe(l: Listener): () => void {
