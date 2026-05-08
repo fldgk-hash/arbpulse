@@ -1,9 +1,10 @@
 import { Orderbook } from './orderbook';
-import type { TradeTick } from './types';
+import type { LiquidationEntry, TradeTick } from './types';
 
 export interface BinanceStreamCallbacks {
   onBook: (book: Orderbook) => void;
   onTrade: (t: TradeTick) => void;
+  onLiquidation?: (entry: LiquidationEntry) => void;
   onStatus: (connected: boolean, msg?: string) => void;
 }
 
@@ -37,7 +38,7 @@ export class BinanceWsStream {
   getBook() { return this.book; }
 
   private connect() {
-    const url = `wss://stream.binance.com:9443/ws/${this.symbol}@depth@100ms/${this.symbol}@aggTrade`;
+    const url = `wss://fstream.binance.com/stream?streams=${this.symbol}@depth@100ms/${this.symbol}@aggTrade/${this.symbol}@forceOrder`;
     try {
       this.ws = new WebSocket(url);
     } catch (e) {
@@ -98,22 +99,36 @@ export class BinanceWsStream {
   }
 
   private handle(msg: any) {
-    if (msg.e === 'depthUpdate') {
+    const event = msg.data || msg;
+    if (event.e === 'depthUpdate') {
       if (!this.seeded) {
-        this.buffer.push(msg);
+        this.buffer.push(event);
         if (this.buffer.length > 200) this.buffer.shift();
         return;
       }
-      this.book.applyDiff(msg.b || [], msg.a || [], msg.u);
+      this.book.applyDiff(event.b || [], event.a || [], event.u);
       this.cb.onBook(this.book);
-    } else if (msg.e === 'aggTrade') {
+    } else if (event.e === 'aggTrade') {
       const t: TradeTick = {
-        ts: msg.T,
-        price: parseFloat(msg.p),
-        qty: parseFloat(msg.q),
-        isSell: msg.m === true,
+        ts: event.T,
+        price: parseFloat(event.p),
+        qty: parseFloat(event.q),
+        isSell: event.m === true,
       };
       this.cb.onTrade(t);
+    } else if (event.e === 'forceOrder' && event.o) {
+      const order = event.o;
+      const side = order.S === 'SELL' ? 'long' : 'short';
+      const price = Number(order.ap || order.p || 0);
+      const qty = Number(order.q || 0);
+      if (price > 0 && qty > 0) {
+        this.cb.onLiquidation?.({
+          ts: Number(event.E || order.T || Date.now()),
+          side,
+          amountUsd: price * qty,
+          symbol: order.s || this.symbol.toUpperCase(),
+        });
+      }
     }
   }
 }
