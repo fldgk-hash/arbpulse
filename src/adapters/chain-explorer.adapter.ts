@@ -4,7 +4,7 @@
 // SolanaFM: 50 req/min (free tier)
 // ============================================
 
-const BSCSCAN_API_KEY = process.env.VITE_BSCSCAN_API_KEY || '';
+const BSCSCAN_API_KEY = import.meta.env.VITE_BSCSCAN_API_KEY || '';
 const BSCSCAN_BASE = 'https://api.bscscan.com/api';
 
 const SOLANAFM_BASE = 'https://api.solana.fm/v0';
