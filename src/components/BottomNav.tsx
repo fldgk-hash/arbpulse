@@ -12,6 +12,7 @@ const VIEWS = [
   { id: 'new',       icon: '🆕', label: 'NEW' },
   { id: 'cex',       icon: '📊', label: 'CEX' },
   { id: 'analytics', icon: '💰', label: 'TRACK' },
+  { id: 'edge',      icon: '⚡', label: 'EDGE' },
   { id: 'settings',  icon: '⚙️', label: 'MORE' },
 ]; // MORE tab = Log Panel + Settings (both visible on scroll)
 
