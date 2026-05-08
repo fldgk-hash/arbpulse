@@ -191,8 +191,8 @@ class EdgeStore {
       shortUsd5m: shortUsd,
       liqPressure,
       wallets: this.wallets,
-      liquidationsKeyMissing: this.liquidationsKeyMissing,
-      walletsKeyMissing: this.walletsKeyMissing,
+      liquidationsUnavailable: this.liquidationsUnavailable,
+      walletsUnavailable: this.walletsUnavailable,
       lastTick: now,
     };
     this.lastSnapshot = snap;
