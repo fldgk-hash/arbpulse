@@ -10,6 +10,7 @@ import { LogPanel } from '@/components/LogPanel';
 import { BottomNav } from '@/components/BottomNav';
 import { TradeCalculator } from '@/components/TradeCalculator';
 import { NewTokensView } from '@/components/NewTokensView';
+import { EdgeView } from '@/components/edge/EdgeView';
 
 const Index = () => {
   const {
@@ -28,6 +29,7 @@ const Index = () => {
     { id: 'new',       label: '🆕 NEW',        count: state.newPairCount },
     { id: 'cex',       label: '📊 CEX',       count: state.cexOpps.length },
     { id: 'analytics', label: '💰 Analytics', count: state.history.length },
+    { id: 'edge',      label: '⚡ Edge',       count: 0 },
   ];
 
   const renderMainView = () => {
@@ -49,6 +51,7 @@ const Index = () => {
     if (view === 'analytics') return (
       <AnalyticsView state={state} onClearHistory={clearHistory} onExportCSV={exportCSV} />
     );
+    if (view === 'edge') return <EdgeView />;
     // default
     return (
       <DexView
