@@ -7,7 +7,7 @@
 import { LPPosition } from '../types/liquidity.types';
 
 const BASE_URL = 'https://public-api.birdeye.so';
-const API_KEY = process.env.VITE_BIRDEYE_API_KEY || ''; // Optional, higher limits with key
+const API_KEY = import.meta.env.VITE_BIRDEYE_API_KEY || ''; // Optional, higher limits with key
 const RATE_LIMIT_MS = 600; // 100 req/min = 1 per 600ms (conservative)
 
 let lastRequestTime = 0;
