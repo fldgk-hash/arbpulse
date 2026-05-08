@@ -5,19 +5,19 @@ interface Props {
   longUsd: number;
   shortUsd: number;
   pressure: number;
-  missingKey: boolean;
+  unavailable: boolean;
 }
 
-export function LiquidationFeed({ entries, longUsd, shortUsd, pressure, missingKey }: Props) {
+export function LiquidationFeed({ entries, longUsd, shortUsd, pressure, unavailable }: Props) {
   return (
     <section className="bg-arb-bg2 rounded-md border border-arb-border p-2">
       <h3 className="text-[10px] font-bold tracking-wider uppercase text-arb-muted mb-2">Liquidations (5m)</h3>
-      {missingKey ? (
+      {unavailable ? (
         <div className="text-[10px] font-mono text-arb-amber">
-          Add COINGLASS_API_KEY to enable liquidation tracking. Free key at coinglass.com/api.
+          Binance force-order stream unavailable. Reconnecting…
         </div>
       ) : entries.length === 0 ? (
-        <div className="text-[10px] font-mono text-arb-muted">No recent liquidations.</div>
+        <div className="text-[10px] font-mono text-arb-muted">Waiting for Binance force-order prints…</div>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2 mb-2 font-mono text-[10px]">

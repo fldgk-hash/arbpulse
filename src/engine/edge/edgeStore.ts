@@ -17,10 +17,9 @@ class EdgeStore {
   private prevMid = 0;
   private liquidations: LiquidationEntry[] = [];
   private wallets: SmartWallet[] = [];
-  private liquidationsKeyMissing = false;
-  private walletsKeyMissing = false;
+  private liquidationsUnavailable = false;
+  private walletsUnavailable = false;
   private tickHandle: number | null = null;
-  private liqHandle: number | null = null;
   private walHandle: number | null = null;
   private started = false;
   private lastSnapshot: EdgeSnapshot | null = null;
@@ -31,14 +30,13 @@ class EdgeStore {
     this.stream = new BinanceWsStream(this.symbol, {
       onBook: () => {},
       onTrade: (t: TradeTick) => this.trades.add(t),
+      onLiquidation: (entry) => this.addLiquidation(entry),
       onStatus: (c) => { this.connected = c; },
     });
     this.stream.start();
     this.tickHandle = window.setInterval(() => this.tick(), 1000);
-    this.liqHandle = window.setInterval(() => this.fetchLiquidations(), 5000);
     this.walHandle = window.setInterval(() => this.fetchWallets(), 30000);
     // initial fetch
-    this.fetchLiquidations();
     this.fetchWallets();
   }
 
@@ -46,9 +44,8 @@ class EdgeStore {
     this.started = false;
     this.stream?.stop();
     if (this.tickHandle) clearInterval(this.tickHandle);
-    if (this.liqHandle) clearInterval(this.liqHandle);
     if (this.walHandle) clearInterval(this.walHandle);
-    this.tickHandle = this.liqHandle = this.walHandle = null;
+    this.tickHandle = this.walHandle = null;
   }
 
   subscribe(l: Listener): () => void {
@@ -61,39 +58,50 @@ class EdgeStore {
     };
   }
 
-  private async fetchLiquidations() {
-    try {
-      const { supabase } = await import('@/integrations/supabase/client');
-      const { data, error } = await supabase.functions.invoke('edge-proxy', {
-        body: { kind: 'liquidations', symbol: this.symbol.replace('USDT', '') },
-      });
-      if (error) throw error;
-      if (data?.missingKey) { this.liquidationsKeyMissing = true; return; }
-      this.liquidationsKeyMissing = false;
-      if (Array.isArray(data?.entries)) {
-        const now = Date.now();
-        const fresh: LiquidationEntry[] = data.entries.map((e: any) => ({
-          ts: e.ts || now, side: e.side, amountUsd: e.amountUsd, symbol: e.symbol || this.symbol,
-        }));
-        this.liquidations = [...fresh, ...this.liquidations].slice(0, 100);
-      }
-    } catch {
-      // silent — engine continues
-    }
+  private addLiquidation(entry: LiquidationEntry) {
+    this.liquidationsUnavailable = false;
+    this.liquidations = [entry, ...this.liquidations]
+      .filter((l, i, arr) => arr.findIndex(x => x.ts === l.ts && x.amountUsd === l.amountUsd && x.side === l.side) === i)
+      .slice(0, 100);
   }
 
   private async fetchWallets() {
     try {
-      const { supabase } = await import('@/integrations/supabase/client');
-      const { data, error } = await supabase.functions.invoke('edge-proxy', {
-        body: { kind: 'wallets' },
-      });
-      if (error) throw error;
-      if (data?.missingKey) { this.walletsKeyMissing = true; return; }
-      this.walletsKeyMissing = false;
-      if (Array.isArray(data?.wallets)) this.wallets = data.wallets;
+      const r = await fetch(`https://fapi.binance.com/futures/data/topLongShortAccountRatio?symbol=${this.symbol}&period=5m&limit=2`, { cache: 'no-store' });
+      if (!r.ok) throw new Error(`top trader feed ${r.status}`);
+      const rows = await r.json();
+      if (!Array.isArray(rows) || rows.length === 0) throw new Error('top trader feed empty');
+      const latest = rows[rows.length - 1];
+      const prev = rows.length > 1 ? rows[rows.length - 2] : latest;
+      const longAccount = Number(latest.longAccount || 0);
+      const shortAccount = Number(latest.shortAccount || 0);
+      const ratio = Number(latest.longShortRatio || 0);
+      const prevRatio = Number(prev.longShortRatio || ratio);
+      const delta = ratio - prevRatio;
+      const actionTs = Date.now();
+      this.walletsUnavailable = false;
+      this.wallets = [
+        {
+          address: 'binance-top-trader-long-accounts',
+          name: 'Top traders long',
+          detail: `${(longAccount * 100).toFixed(1)}% accounts · ratio ${ratio.toFixed(3)}`,
+          score: Number((Math.max(0, ratio - 1) * 10 + Math.max(0, delta) * 100).toFixed(2)),
+          trades: 1,
+          label: ratio > 1.05 || delta > 0.01 ? 'smart_money' : 'tracking',
+          lastAction: delta > 0.005 ? { ts: actionTs, kind: 'buy', symbol: this.symbol } : undefined,
+        },
+        {
+          address: 'binance-top-trader-short-accounts',
+          name: 'Top traders short',
+          detail: `${(shortAccount * 100).toFixed(1)}% accounts · ratio ${(1 / Math.max(ratio, 0.0001)).toFixed(3)}`,
+          score: Number((Math.max(0, 1 - ratio) * 10 + Math.max(0, -delta) * 100).toFixed(2)),
+          trades: 1,
+          label: ratio < 0.95 || delta < -0.01 ? 'smart_money' : 'tracking',
+          lastAction: delta < -0.005 ? { ts: actionTs, kind: 'sell', symbol: this.symbol } : undefined,
+        },
+      ];
     } catch {
-      // silent — engine continues
+      this.walletsUnavailable = true;
     }
   }
 
@@ -183,8 +191,8 @@ class EdgeStore {
       shortUsd5m: shortUsd,
       liqPressure,
       wallets: this.wallets,
-      liquidationsKeyMissing: this.liquidationsKeyMissing,
-      walletsKeyMissing: this.walletsKeyMissing,
+      liquidationsUnavailable: this.liquidationsUnavailable,
+      walletsUnavailable: this.walletsUnavailable,
       lastTick: now,
     };
     this.lastSnapshot = snap;

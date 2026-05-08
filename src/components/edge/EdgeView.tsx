@@ -48,10 +48,10 @@ export function EdgeView() {
         longUsd={snap.longUsd5m}
         shortUsd={snap.shortUsd5m}
         pressure={snap.liqPressure}
-        missingKey={snap.liquidationsKeyMissing}
+        unavailable={snap.liquidationsUnavailable}
       />
 
-      <SmartMoneyPanel wallets={snap.wallets} missingKey={snap.walletsKeyMissing} />
+      <SmartMoneyPanel wallets={snap.wallets} unavailable={snap.walletsUnavailable} />
     </div>
   );
 }

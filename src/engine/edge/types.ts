@@ -27,6 +27,8 @@ export interface LiquidationEntry {
 }
 export interface SmartWallet {
   address: string;
+  name?: string;
+  detail?: string;
   score: number;
   trades: number;
   label: 'tracking' | 'smart_money';
@@ -50,7 +52,7 @@ export interface EdgeSnapshot {
   shortUsd5m: number;
   liqPressure: number;        // -1..+1
   wallets: SmartWallet[];
-  liquidationsKeyMissing: boolean;
-  walletsKeyMissing: boolean;
+  liquidationsUnavailable: boolean;
+  walletsUnavailable: boolean;
   lastTick: number;
 }

@@ -5,7 +5,7 @@
 // ============================================
 
 const BASE_URL = 'https://api.bscscan.com/api';
-const API_KEY = process.env.VITE_BSCSCAN_API_KEY || 'YourFreeApiKeyHere';
+const API_KEY = import.meta.env.VITE_BSCSCAN_API_KEY || 'YourFreeApiKeyHere';
 const RATE_LIMIT_MS = 250; // 5 req/sec = 1 per 200ms, use 250ms for safety
 
 let lastRequestTime = 0;
