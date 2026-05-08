@@ -76,7 +76,7 @@ export class BinanceWsStream {
     this.seeded = false;
     this.buffer = [];
     try {
-      const r = await fetch(`https://api.binance.com/api/v3/depth?symbol=${this.symbol.toUpperCase()}&limit=1000`);
+      const r = await fetch(`https://fapi.binance.com/fapi/v1/depth?symbol=${this.symbol.toUpperCase()}&limit=1000`);
       const snap = await r.json();
       this.book.seed(snap);
       // apply buffered events with U <= lastUpdateId+1 <= u
